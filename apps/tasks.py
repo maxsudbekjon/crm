@@ -16,7 +16,7 @@ def distribute_leads_task():
     eligible_ops = []
     for op in operators:
         active_leads = op.leads.filter(status__in=['New', 'Info_given']).count()
-        active_tasks = op.tasks.filter(completed=False).count()
+        active_tasks = op.tasks.filter(is_completed=False).count()
         if active_leads > 0 or active_tasks > 0:
             continue
         penalty_count = op.penalties.count()

@@ -132,7 +132,6 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
-    'Auth.backends.UsernameOrEmailOrPhoneBackend',
 ]
 AUTH_USER_MODEL = 'Auth.CustomUser'
 
@@ -153,6 +152,6 @@ CELERY_TIMEZONE = 'Asia/Tashkent'
 CELERY_BEAT_SCHEDULE = {
     'distribute-leads-everyday-23pm': {
         'task': 'apps.tasks.distribute_leads_task',
-        'schedule': crontab(hour=9, minute=14),
+        'schedule': crontab(hour=15, minute=20),
     },
 }

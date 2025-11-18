@@ -3,7 +3,6 @@ from pathlib import Path
 
 from celery.schedules import crontab
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -16,7 +15,7 @@ SECRET_KEY = 'django-insecure-3@v*47k-0ve9k415d!o#e2#4sk20$o2g)4s5!d92sk$ukmf2u4
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*", "172.17.0.1", "192.168.0.213"]
 
 
 # Application definition
@@ -109,8 +108,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-# Internationalization
-# https://docs.djangoproject.com/en/5.2/topics/i18n/
+
 
 LANGUAGE_CODE = 'en-us'
 
@@ -147,11 +145,10 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Asia/Tashkent'
 
-
 # Har kuni soat 23:00 da leadlarni taqsimlash
 CELERY_BEAT_SCHEDULE = {
     'distribute-leads-everyday-23pm': {
         'task': 'apps.tasks.distribute_leads_task',
-        'schedule': crontab(hour=15, minute=20),
+        'schedule': crontab(hour=14, minute=13),
     },
 }

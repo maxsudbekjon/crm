@@ -1,41 +1,66 @@
+from datetime import timedelta
 
+from django.utils import timezone
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from django.db.models import Count, Q, Avg
-from apps.models import Lead, Call, Task, Penalty
+from django.db.models import Count, Q
+from apps.models import Lead, Operator
 
 
 @api_view(['GET'])
 def analytics_api(request):
-    # 1️⃣ Jami leadlar soni
-    total_leads = Lead.objects.count()
+    now = timezone.now()
 
-    # 2️⃣ Conversion rate
+    # 1 hafta va 1 oy ichida sotilgan leadlar
+    week_sold = Lead.objects.filter(
+        status=Lead.Status.SOLD,
+        updated_at__gte=now - timedelta(days=7)
+    ).count()
+
+    month_sold = Lead.objects.filter(
+        status=Lead.Status.SOLD,
+        updated_at__gte=now - timedelta(days=30)
+    ).count()
+
+    # Eng ko'p lead olgan operator
+    top_operator_leads = (
+        Operator.objects.annotate(lead_count=Count('leads'))
+        .order_by('-lead_count')
+        .values('full_name', 'lead_count')
+        .first()
+    )
+
+    # Eng yaxshi sotgan operator
+    top_operator_sales = (
+        Operator.objects.annotate(
+            sold_count=Count('leads', filter=Q(leads__status=Lead.Status.SOLD))
+        )
+        .order_by('-sold_count')
+        .values('full_name', 'sold_count')
+        .first()
+    )
+
+    overall_leads = Lead.objects.all().count()
     sold_leads = Lead.objects.filter(status=Lead.Status.SOLD).count()
-    conversion_rate = (sold_leads / total_leads * 100) if total_leads > 0 else 0
 
-    # 3️⃣ O‘rtacha qo‘ng‘iroq davomiyligi
-    avg_call_duration = Call.objects.aggregate(
-        avg_duration=Avg('duration_seconds')
-    )['avg_duration'] or 0
+    # Oxirgi 1 hafta va 1 oy ichida kelgan leadlar soni
+    week_created = Lead.objects.filter(
+        created_at__gte=now - timedelta(days=7)
+    ).count()
 
-    # 4️⃣ Task completion foizi
-    total_tasks = Task.objects.count()
-    completed_tasks = Task.objects.filter(completed=True).count()
-    tasks_completed_percent = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
-
-    # 5️⃣ O‘rtacha jarima ballari
-    avg_penalties = Penalty.objects.aggregate(
-        avg_points=Avg('points')
-    )['avg_points'] or 0
+    month_created = Lead.objects.filter(
+        created_at__gte=now - timedelta(days=30)
+    ).count()
 
     data = {
-        "total_leads": total_leads,
-        "conversion_rate": round(conversion_rate, 2),
-        "avg_call_duration": round(avg_call_duration, 2),
-        "tasks_completed_percent": round(tasks_completed_percent, 2),
-        "avg_penalties": round(avg_penalties, 2),
+        "sold_last_week": week_sold,
+        "sold_last_month": month_sold,
+        "top_operator_by_leads": top_operator_leads,
+        "top_operator_by_sales": top_operator_sales,
+        "lead_created_last_week": week_created,
+        "lead_created_last_month": month_created,
+        "overall_leads": overall_leads,
+        "sold_leads": sold_leads
     }
 
     return Response(data)
-

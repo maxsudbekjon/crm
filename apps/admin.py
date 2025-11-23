@@ -12,12 +12,12 @@ class BranchAdmin(admin.ModelAdmin):
 
 @admin.register(Operator)
 class OperatorAdmin(admin.ModelAdmin):
-    list_display = ('full_name', 'status', 'gender', 'phone_number', 'salary', 'penalty', 'branch', 'photo_tag',
+    list_display = ('id', 'user', 'status', 'gender', 'salary', 'penalty', 'branch', 'photo_tag',
                     'created_at')
-    search_fields = ('full_name', 'phone_number')
+    search_fields = ('user', )
     list_filter = ('status', 'gender', 'branch')
     readonly_fields = ('created_at', 'updated_at')
-    ordering = ('full_name',)
+    ordering = ('user',)
 
     def photo_tag(self, obj):
         if obj.photo:
@@ -30,7 +30,7 @@ class OperatorAdmin(admin.ModelAdmin):
 
 @admin.register(Lead)
 class LeadAdmin(admin.ModelAdmin):
-    list_display = ('full_name', 'phone', 'status', 'operator', 'demo_date', 'last_contact_date', 'created_at',
+    list_display = ('id', 'full_name', 'phone', 'status', 'operator', 'demo_date', 'last_contact_date', 'created_at',
                     'updated_at')
     search_fields = ('full_name', 'phone')
     list_filter = ('status',)
@@ -45,7 +45,20 @@ class TaskAdmin(admin.ModelAdmin):
     search_fields = ('title', 'operator__full_name', 'lead__full_name')
     readonly_fields = ('created_at', 'updated_at')
 
-admin.site.register(Notification)
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ('id', 'get_operator_username', 'message', 'created_at', 'is_read')
+
+    def get_operator_username(self, obj):
+        return obj.user.user.username  # operator → customuser → username
+
+    get_operator_username.short_description = 'Operator'
+
+    # Filter qilish uchun
+    list_filter = ('is_read', 'created_at', 'user')
+
+
 @admin.register(Call)
 class CallAdmin(admin.ModelAdmin):
     list_display = ('call_time', 'duration_seconds', 'result')

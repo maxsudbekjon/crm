@@ -1,11 +1,16 @@
+from django.utils import timezone
+from datetime import timedelta
 from celery import shared_task
 from django.db import transaction
 from django.db.models import Count
 from collections import defaultdict
 
-from apps.models import Lead, Operator
+from .models import Lead, Operator, Task
+from .utils import create_and_send_notification
 
-
+# =========================
+# Leadlarni operatorlarga taqsimlash
+# =========================
 @shared_task
 def distribute_leads_task():
     debug_info = {
@@ -47,15 +52,9 @@ def distribute_leads_task():
             'total_leads_handled': op.total_leads_count
         }
 
-        # Check for active leads with specific statuses
-        active_leads = op.leads.filter(
-            status__in=["need_contact"]
-        ).count()
-
-        # Check for unfinished tasks
+        active_leads = op.leads.filter(status__in=["need_contact"]).count()
         active_tasks = op.tasks.filter(is_completed=False).count()
 
-        # Determine eligibility
         if active_leads > 0:
             operator_info['reason'] = f"Has {active_leads} active lead(s)"
         elif active_tasks > 0:
@@ -68,16 +67,14 @@ def distribute_leads_task():
         debug_info['operator_details'].append(operator_info)
 
     debug_info['eligible_operators'] = len(eligible)
-
     if not eligible:
         debug_info['summary']['message'] = "No eligible operators found."
         return debug_info
 
-    # Step 4: Sort operators by total leads handled (least to most)
-    # This ensures fairness for remaining leads distribution
+    # Step 4: Sort operators by total leads handled
     eligible = sorted(eligible, key=lambda o: o.total_leads_count)
 
-    # Step 5: Calculate distribution
+    # Step 5: Round-robin distribution
     lead_count = len(leads)
     op_count = len(eligible)
     leads_per_operator = lead_count // op_count
@@ -85,24 +82,15 @@ def distribute_leads_task():
 
     debug_info['summary']['leads_per_operator'] = leads_per_operator
     debug_info['summary']['remaining_leads'] = remaining_leads
-    debug_info['summary']['distribution_note'] = (
-        f"Each operator gets {leads_per_operator} lead(s). "
-        f"Remaining {remaining_leads} lead(s) go to operators with fewest total leads."
-    )
 
-    # Step 6: Round-robin distribution with transaction safety
     with transaction.atomic():
         distribution_count = defaultdict(int)
         op_index = 0
 
         for i, lead in enumerate(leads):
-            # Select operator in round-robin fashion
             operator = eligible[op_index]
-
-            # Assign lead to operator
             lead.operator = operator
             lead.save()
-
             distribution_count[operator.id] += 1
 
             debug_info['distribution'].append({
@@ -112,11 +100,8 @@ def distribute_leads_task():
                 'operator_name': operator.full_name,
                 'sequence': i + 1
             })
-
-            # Move to next operator (round-robin)
             op_index = (op_index + 1) % op_count
 
-    # Step 7: Generate summary statistics
     debug_info['summary']['total_assigned'] = len(leads)
     debug_info['summary']['assignments_per_operator'] = [
         {
@@ -133,3 +118,31 @@ def distribute_leads_task():
     )
 
     return debug_info
+
+
+# =========================
+# Task deadline notification
+# =========================
+@shared_task
+def check_task_deadlines():
+    now = timezone.now()
+    tasks = Task.objects.filter(is_completed=False)
+
+    for task in tasks:
+        operator = task.operator
+        if not operator:
+            continue
+
+        time_left = task.deadline - now
+
+        if timedelta(minutes=9) < time_left <= timedelta(minutes=10) and not task.is_notified_10min:
+            message = f"'{task.title}' topshirig'ingizga 10 daqiqa qoldi!"
+            create_and_send_notification(operator, message, data={"task_id": task.id, "rem": 10})
+            task.is_notified_10min = True
+            task.save(update_fields=['is_notified_10min'])
+
+        elif timedelta(minutes=4) < time_left <= timedelta(minutes=5) and not task.is_notified_5min:
+            message = f"'{task.title}' topshirig'ingizga 5 daqiqa qoldi!"
+            create_and_send_notification(operator, message, data={"task_id": task.id, "rem": 5})
+            task.is_notified_5min = True
+            task.save(update_fields=['is_notified_5min'])

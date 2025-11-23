@@ -13,7 +13,10 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 # Barcha app’larda joylashgan tasks.py fayllarni avtomatik topadi
 app.autodiscover_tasks()
 
+# Timezone to'g'ri kelishi uchun
+app.conf.timezone = 'Asia/Tashkent'
 
+# Test task
 @app.task(bind=True)
 def debug_task(self):
     print(f'Request: {self.request!r}')

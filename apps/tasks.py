@@ -1,42 +1,31 @@
+from django.utils import timezone
+from datetime import timedelta
 from celery import shared_task
-from apps.models import Lead, Operator
-import itertools
-import random
+from .models import Task, Operator
+from .utils import create_and_send_notification
 
 @shared_task
-def distribute_leads_task():
-    leads = list(Lead.objects.filter(operator__isnull=True))
-    if not leads:
-        return "Biriktirilmagan leadlar yo‘q."
+def check_task_deadlines():
+    now = timezone.now()
+    tasks = Task.objects.filter(is_completed=False)
 
-    operators = Operator.objects.filter(status='Worker')
-    if not operators.exists():
-        return "Tasdiqlangan operatorlar yo‘q."
-
-    eligible_ops = []
-    for op in operators:
-        active_leads = op.leads.filter(status__in=['New', 'Info_given']).count()
-        active_tasks = op.tasks.filter(is_completed=False).count()
-        if active_leads > 0 or active_tasks > 0:
+    for task in tasks:
+        operator = task.operator  # to'g'ridan-to'g'ri Operator
+        if not operator:
             continue
-        penalty_count = op.penalties.count()
-        weight = max(1, 5 - penalty_count)  # Penalty ko‘p bo‘lsa, kamroq vazn
-        eligible_ops.extend([op] * weight)
 
-    if not eligible_ops:
-        return "Yaroqli operatorlar topilmadi."
+        time_left = task.deadline - now
 
-    random.shuffle(eligible_ops)
-    ops_cycle = itertools.cycle(eligible_ops)
+        # 10 daqiqa qolganda
+        if timedelta(minutes=9) < time_left <= timedelta(minutes=10) and not task.is_notified_10min:
+            message = f"'{task.title}' topshirig'ingizga 10 daqiqa qoldi!"
+            create_and_send_notification(operator, message, data={"task_id": task.id, "rem": 10})
+            task.is_notified_10min = True
+            task.save(update_fields=['is_notified_10min'])
 
-    assigned = []
-    for lead in leads:
-        operator = next(ops_cycle)
-        lead.operator = operator
-        lead.save()
-        assigned.append({
-            "lead": lead.full_name,
-            "operator": operator.full_name
-        })
-
-    return f"{len(assigned)} ta lead operatorlarga taqsimlandi."
+        # 5 daqiqa qolganda
+        elif timedelta(minutes=4) < time_left <= timedelta(minutes=5) and not task.is_notified_5min:
+            message = f"'{task.title}' topshirig'ingizga 5 daqiqa qoldi!"
+            create_and_send_notification(operator, message, data={"task_id": task.id, "rem": 5})
+            task.is_notified_5min = True
+            task.save(update_fields=['is_notified_5min'])

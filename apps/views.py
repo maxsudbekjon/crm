@@ -177,7 +177,7 @@ class SoldClientsPaymentsAPIView(APIView):
                 'lead_name': lead.full_name,
                 'total_payment': total_payment,
                 'operator_id': operator.id if operator else None,
-                'operator_name': operator.full_name if operator else None,
+                'operator_name': operator.user.full_name if operator else None,
                 'operator_bonus': operator_bonus
             })
         return Response(results, status=status.HTTP_200_OK)

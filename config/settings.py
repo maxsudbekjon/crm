@@ -191,7 +191,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     'distribute-leads-everyday-23pm': {
         'task': 'apps.tasks.distribute_leads_task',
-        'schedule': crontab(hour=11, minute=25),
+        'schedule': crontab(hour=14, minute=22),
     },
 }
 

@@ -46,7 +46,7 @@ def distribute_leads_task():
     for op in operators:
         operator_info = {
             'id': op.id,
-            'name': op.full_name,
+            'name': op.user.full_name,
             'eligible': False,
             'reason': None,
             'total_leads_handled': op.total_leads_count
@@ -97,7 +97,7 @@ def distribute_leads_task():
                 'lead_id': lead.id,
                 'lead_name': lead.full_name,
                 'operator_id': operator.id,
-                'operator_name': operator.full_name,
+                'operator_name': operator.user.full_name,
                 'sequence': i + 1
             })
             op_index = (op_index + 1) % op_count
@@ -106,7 +106,7 @@ def distribute_leads_task():
     debug_info['summary']['assignments_per_operator'] = [
         {
             'operator_id': op.id,
-            'operator_name': op.full_name,
+            'operator_name': op.user.full_name,
             'leads_assigned': distribution_count[op.id],
             'previous_total': op.total_leads_count,
             'new_total': op.total_leads_count + distribution_count[op.id]

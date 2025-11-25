@@ -1,8 +1,9 @@
+from typing import Any
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
 
-from Auth.models import CustomUser
+from user.models import CustomUser
 
 
 class Base(models.Model):
@@ -30,22 +31,48 @@ class Operator(Base):
         MALE = 'Male', 'Male'
         FEMALE = 'Female', 'Female'
 
-    full_name = models.CharField(max_length=100)
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, null=True, blank=True)
     status = models.CharField(max_length=20, choices=StatusType.choices)
-    phone_number = models.CharField(max_length=20)
+    course = models.ManyToManyField('apps.Course', blank=True)  # Operator
     photo = models.ImageField(upload_to='operator_photos/', blank=True, null=True)
     salary = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    commission_rate = models.FloatField(default=0.05)  # default 5%
     penalty = models.IntegerField(default=0)
     gender = models.CharField(max_length=10, choices=StatusGender.choices)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='operators')
 
     def __str__(self):
-        return self.full_name
+        if self.user.first_name or self.user.last_name:
+            return f"{self.user.first_name or ''} {self.user.last_name or ''}".strip()
+        return self.user.username
 
     def add_penalty(self, points=1):
         self.penalty += points
         self.save(update_fields=['penalty'])
+
+from django.db import models
+
+class Course(models.Model):
+    title = models.CharField(max_length=200)  # kurs nomi
+    description = models.TextField(blank=True)  # kurs haqida
+    price = models.FloatField()  # kurs narxi
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.title} | {self.price} so'm | {self.created_at.strftime('%Y-%m-%d')}"
+
+    class Meta:
+        ordering = ['created_at']
+
+
+class Enrollment(models.Model):
+    operator = models.ForeignKey(Operator, on_delete=models.CASCADE)
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    student_name = models.CharField(max_length=200)
+    price_paid = models.FloatField()  # kurs narxi yoki chegirma bilan
+    created_at = models.DateTimeField(auto_now_add=True)
+
 
 class Lead(Base):
     class Status(models.TextChoices):
@@ -60,16 +87,24 @@ class Lead(Base):
 
     full_name = models.CharField(max_length=150)
     phone = models.CharField(max_length=20, unique=True)
+    course = models.ForeignKey('apps.Course', on_delete=models.SET_NULL, null=True, blank=True)  # Lead
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)  # bu borligini tekshir
     status = models.CharField(max_length=50, choices=Status.choices, default='new')
     operator = models.ForeignKey(Operator, on_delete=models.SET_NULL, null=True, blank=True, related_name="leads")
     source = models.CharField(max_length=100, blank=True, null=True)
     demo_date = models.DateTimeField(blank=True, null=True)
     last_contact_date = models.DateTimeField(blank=True, null=True)
 
+
     class Meta:
         ordering = ['-created_at']
         verbose_name = "Lead"
         verbose_name_plural = "Leadlar"
+
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self.price = None
 
     def __str__(self):
         return f"{self.full_name} ({self.get_status_display()})"
@@ -107,8 +142,8 @@ class Call(Base):
         verbose_name_plural = "Qo‘ng‘iroqlar"
 
     def __str__(self):
-        return f"{self.lead.full_name} bilan {self.operator.full_name} ({self.get_result_display()})"
-    
+        return f"{self.lead.full_name} bilan     ({self.get_result_display()})"
+
 class Task(Base):
     operator = models.ForeignKey(Operator, on_delete=models.CASCADE, related_name="tasks")
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name="tasks")

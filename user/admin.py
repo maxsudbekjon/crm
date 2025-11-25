@@ -1,4 +1,4 @@
 from django.contrib import admin
-from Auth.models import *
+from user.models import *
 
 admin.site.register(CustomUser)

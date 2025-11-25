@@ -36,6 +36,8 @@ class Operator(Base):
     gender = models.CharField(max_length=10, choices=StatusGender.choices)
     branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='operators')
 
+    def __str__(self):
+        return self.user.username
 
     def add_penalty(self, points=1):
         self.penalty += points
@@ -134,7 +136,7 @@ class Notification(Base):
 
 
     def __str__(self):
-        return f"Notif to {self.user.username}: {self.message[:50]}"
+        return f"Notif to {self.user.user.username}: {self.message[:50]}"
 
 class Penalty(models.Model):
     operator = models.ForeignKey(Operator, on_delete=models.CASCADE, related_name="penalties")

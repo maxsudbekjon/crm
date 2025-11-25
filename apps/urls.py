@@ -11,8 +11,8 @@ router = DefaultRouter()
 urlpatterns = [
     #operator
     path('operator-create/', OperatorCreateView.as_view(), name='operator-create'),
-    path('list/', OperatorListView.as_view(), name='operator-list'),
-    path('<int:pk>/', OperatorDetailView.as_view(), name='operator-detail'),
+    path('OperatorList/', OperatorListView.as_view(), name='operator-list'),
+    path('OperatorDetail/<int:pk>/', OperatorDetailView.as_view(), name='operator-detail'),
     # Lead endpoints
     path('leads/create/', LeadCreateView.as_view(), name='lead-create'),
     path('leads/', LeadListView.as_view(), name='lead-list'),
@@ -27,6 +27,7 @@ urlpatterns = [
 
     #operator_analytics urls
     path('operator_analytics/', operator_analytics, name='operator_analytics'),
+    path('overall_analitic/',  analytics_api, name='overall_analitic'),
 
     # Router bilan viewsetlar
     path('', include(router.urls)),

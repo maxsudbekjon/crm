@@ -7,7 +7,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 import random
-
+from django.core.mail import send_mail
 from .serializers import *
 
 User = get_user_model()
@@ -152,11 +152,23 @@ class ForgotPasswordView(APIView):
             user = User.objects.filter(email=email).first()
             if user:
                 code = str(random.randint(1000, 9999))
+
+                # Sessiyaga saqlaymiz
                 request.session['reset_user_id'] = user.id
                 request.session['reset_code'] = code
-                print(f"Parolni tiklash kodi: {code}")
-                return Response({"message": "Kod yuborildi (terminalda ko‘ring)."})
+
+                # ✉️ Email yuborish
+                send_mail(
+                    subject="Parolni tiklash kodingiz",
+                    message=f"Sizning parolni tiklash kodingiz: {code}",
+                    from_email=None,
+                    recipient_list=[email],
+                    fail_silently=False,
+                )
+
+                return Response({"message": "Kod emailga yuborildi."})
             return Response({"error": "Email topilmadi"}, status=404)
+
         return Response(serializer.errors, status=400)
 
 

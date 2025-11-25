@@ -1,7 +1,5 @@
 from django.db import models
 from django.utils import timezone
-from django.contrib.auth.models import User
-
 from Auth.models import CustomUser
 
 
@@ -30,10 +28,8 @@ class Operator(Base):
         MALE = 'Male', 'Male'
         FEMALE = 'Female', 'Female'
 
-    full_name = models.CharField(max_length=100)
-    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, null=True, blank=True)
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='operator')
     status = models.CharField(max_length=20, choices=StatusType.choices)
-    phone_number = models.CharField(max_length=20)
     photo = models.ImageField(upload_to='operator_photos/', blank=True, null=True)
     salary = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     penalty = models.IntegerField(default=0)
@@ -41,7 +37,7 @@ class Operator(Base):
     branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='operators')
 
     def __str__(self):
-        return self.full_name
+        return self.user.username
 
     def add_penalty(self, points=1):
         self.penalty += points
@@ -132,7 +128,7 @@ class Task(Base):
         return f"{self.title} ({'Bajarilgan' if self.is_completed else 'Bajarilmagan'})"
 
 class Notification(Base):
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='notifications')
+    user = models.ForeignKey(Operator, on_delete=models.CASCADE, related_name='notifications')
     task = models.ForeignKey('Task', on_delete=models.CASCADE, null=True, blank=True, related_name='notifications')
     message = models.TextField()
     data = models.JSONField(null=True, blank=True)
@@ -140,7 +136,7 @@ class Notification(Base):
 
 
     def __str__(self):
-        return f"Notif to {self.user.username}: {self.message[:50]}"
+        return f"Notif to {self.user.user.username}: {self.message[:50]}"
 
 class Penalty(models.Model):
     operator = models.ForeignKey(Operator, on_delete=models.CASCADE, related_name="penalties")

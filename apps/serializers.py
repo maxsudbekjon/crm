@@ -2,6 +2,8 @@ from rest_framework import serializers
 from .models import Lead, Task, Operator, Notification
 from Auth.serializers import *
 from rest_framework.parsers import MultiPartParser, FormParser
+from django import forms
+from .models import Enrollment
 
 # ==========================
 # Lead Serializer
@@ -16,8 +18,12 @@ class LeadSerializer(serializers.ModelSerializer):
 class LeadCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lead
-        fields = ['id', 'full_name', 'phone', 'operator']
+        fields = ['id', 'full_name', 'phone', 'operator', 'source']
 
+class EnrollmentForm(forms.ModelForm):
+    class Meta:
+        model = Enrollment
+        fields = ['student_name', 'course', 'operator', 'price_paid']
 
 class LeadStatusUpdateSerializer(serializers.ModelSerializer):
     class Meta:

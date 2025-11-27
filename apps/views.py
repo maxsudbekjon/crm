@@ -4,12 +4,16 @@ from django.utils import timezone
 from django.db.models import Count, Q, Sum
 from django.http import JsonResponse
 from rest_framework import generics, permissions, viewsets, status, serializers
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from rest_framework.views import APIView
-
+from django.shortcuts import render, redirect
+from django.db import IntegrityError
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from django.shortcuts import redirect
+from .models import Enrollment
 from .models import *
 from .serializers import *
 

@@ -1,6 +1,7 @@
 from django.contrib import admin
-from apps.models import Branch, Operator, Lead, Task, Penalty, SMS, Contract, Notification, Call
-
+from apps.models import *
+from django.utils.safestring import mark_safe
+from .tasks import process_lead_commission
 
 @admin.register(Branch)
 class BranchAdmin(admin.ModelAdmin):
@@ -12,7 +13,7 @@ class BranchAdmin(admin.ModelAdmin):
 
 @admin.register(Operator)
 class OperatorAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user', 'status', 'gender', 'salary', 'penalty', 'branch', 'photo_tag',
+    list_display = ('id', 'user', 'status', 'gender', 'salary', 'commission_rate', 'amount', 'penalty', 'branch', 'photo_tag',
                     'created_at')
     search_fields = ('user', )
     list_filter = ('status', 'gender', 'branch')
@@ -30,10 +31,11 @@ class OperatorAdmin(admin.ModelAdmin):
 
 @admin.register(Lead)
 class LeadAdmin(admin.ModelAdmin):
-    list_display = ('id', 'full_name', 'phone', 'status', 'operator', 'demo_date', 'last_contact_date', 'created_at',
+    list_display = ('id', 'full_name', 'phone', 'course', 'status', 'operator', 'source', 'demo_date', 'last_contact_date','amount', 'created_at',
                     'updated_at')
-    search_fields = ('full_name', 'phone')
-    list_filter = ('status',)
+    search_fields = ('full_name', 'phone',)
+    list_filter = ('status', 'course', 'source')
+    ordering = ('-demo_date',)
     readonly_fields = ('created_at', 'updated_at')
 
 
@@ -90,3 +92,27 @@ class ContractAdmin(admin.ModelAdmin):
                     'updated_at')
     search_fields = ('course_name', 'operator__full_name', 'lead__full_name')
     readonly_fields = ('created_at', 'updated_at')
+
+@admin.register(Course)
+class CourseAdmin(admin.ModelAdmin):
+    list_display = ('title', 'price', 'created_at')  # admin panelida ko‘rinadigan ustunlar
+    search_fields = ('title',)  # qidiruv maydoni
+    list_filter = ('created_at',)  # filtrlash maydoni
+    ordering = ('created_at',)
+
+from django.contrib import admin
+from .models import Enrollment
+
+@admin.register(Enrollment)
+class EnrollmentAdmin(admin.ModelAdmin):
+    list_display = ('student_name', 'operator', 'course', 'price_paid', 'created_at')
+    ordering = ('-created_at',)  # yangi -> eski
+    list_filter = ('operator', 'course', 'created_at')
+    search_fields = ('student_name', 'operator__user__first_name', 'operator__user__last_name')
+
+
+@admin.action(description="Run lead commission calculation")
+def run_commission(modeladmin, request, queryset):
+    from apps.tasks import process_lead_commission
+    process_lead_commission()
+    modeladmin.message_user(request, "Komissiya hisoblandi")

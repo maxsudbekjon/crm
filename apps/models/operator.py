@@ -1,0 +1,30 @@
+from django.db import models
+
+from Auth.models import CustomUser
+from apps.models.base import Base
+from apps.models.branch import Branch
+
+
+class Operator(Base):
+    class StatusType(models.TextChoices):
+        INTERN = 'Intern', 'Intern'
+        WORKER = 'Worker', 'Worker'
+
+    class StatusGender(models.TextChoices):
+        MALE = 'Male', 'Male'
+        FEMALE = 'Female', 'Female'
+
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='operator')
+    status = models.CharField(max_length=20, choices=StatusType.choices)
+    photo = models.ImageField(upload_to='operator_photos/', blank=True, null=True)
+    salary = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    penalty = models.IntegerField(default=0)
+    gender = models.CharField(max_length=10, choices=StatusGender.choices)
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='operators')
+
+    def __str__(self):
+        return self.user.username
+
+    def add_penalty(self, points=1):
+        self.penalty += points
+        self.save(update_fields=['penalty'])

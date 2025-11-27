@@ -53,11 +53,12 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError('Iltimos, username va password kiriting')
 
         user = authenticate(username=username, password=password)
-        user_role = user.role
+        user_role =user.role
         if not user:
             raise serializers.ValidationError("Noto'g'ri login yoki parol")
         if not user.is_active:
             raise serializers.ValidationError('Foydalanuvchi faol emas')
+
         if not user_role:
             raise serializers.ValidationError("Admin sizga hali role bermagan")
 

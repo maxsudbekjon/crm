@@ -48,7 +48,8 @@ celerybeat-schedule-wal
 
 .DS_Store
 Thumbs.db
-
+*cpython-312.pyc
+*cpython-313.pyc
 .coverage
 htmlcov/
 pytest_cache/

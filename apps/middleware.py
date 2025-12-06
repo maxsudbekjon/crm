@@ -17,3 +17,4 @@ class UTMMiddleware:
         # Keyingi viewga requestni yuboramiz
         response = self.get_response(request)
         return response
+

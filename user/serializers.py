@@ -12,7 +12,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CustomUser
-        fields = ['id', 'email', 'username', 'first_name', 'last_name', 'password1', 'password2', 'address', 'age', 'phone']
+        fields = ['id', 'email', 'username', 'first_name', 'last_name', 'password1', 'password2', 'role', 'address', 'age', 'phone']
         read_only_fields = ("id",)
 
     def validate(self, attrs):
@@ -53,12 +53,17 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError('Iltimos, username va password kiriting')
 
         user = authenticate(username=username, password=password)
+        user_role =user.role
         if not user:
             raise serializers.ValidationError("Noto'g'ri login yoki parol")
         if not user.is_active:
             raise serializers.ValidationError('Foydalanuvchi faol emas')
 
+        if not user_role:
+            raise serializers.ValidationError("Admin sizga hali role bermagan")
+
         attrs['user'] = user
+        attrs['role'] = user_role
         return attrs
 
 class ProfileUpdateSerializer(serializers.ModelSerializer):
@@ -80,7 +85,7 @@ class PasswordChangeSerializer(serializers.Serializer):
     def validate_old_password(self, value):
         user = self.context.get('request').user
         if not user.check_password(value):
-            raise serializers.ValidationError("Old password is incorrect.")
+            raise serializers.ValidationError("Eski parol noto'g'ri")
         return value
 
     def validate_new_password(self, value):
@@ -121,4 +126,3 @@ class ResetPasswordSerializer(serializers.Serializer):
         except DjangoValidationError as e:
             raise serializers.ValidationError({"password":list(e.messages)})
         return attrs
-

@@ -1,30 +1,40 @@
 from django.urls import path, include
-from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
-from django.urls import path
+from django.conf.urls.static import static
 from config import settings
-from .views import LeadUpdateStatusView, TaskViewSet, LeadViewSet, success, register, LeadCreateView, OperatorViewSet
-from . import views
+from .views import *
+
+app_name = "apps"
 
 router = DefaultRouter()
-router.register(r'operators', OperatorViewSet)
-
-router.register(r'tasks', TaskViewSet, basename='task')
-router.register(r'leads', LeadViewSet, basename='lead')
-
 urlpatterns = [
-    path('lead/<int:pk>/update-status/', LeadUpdateStatusView.as_view(), name='lead-update-status'),
+    #operator
+    path('operator-create/', OperatorCreateView.as_view(), name='operator-create'),
+    path('OperatorList/', OperatorListView.as_view(), name='operator-list'),
+    path('OperatorDetail/<int:pk>/', OperatorDetailView.as_view(), name='operator-detail'),
+    path('operator-salaries/', OperatorSalaryListAPIView.as_view(), name='operator-salaries'),
+    # Lead endpoints
+    path('leads/create/', LeadCreateView.as_view(), name='lead-create'),
+    path('leads/', LeadListView.as_view(), name='lead-list'),
+    path('leads/<int:pk>/update-status/', LeadStatusUpdateAPIView.as_view(), name='lead-update-status'),
+    path('sold-leads/', SoldLeadsAPIView.as_view(), name='sold-leads'),
+    # Task create endpoint
+    path('tasks/create/', TaskCreateAPIView.as_view(), name='task-create'),
+    # notifications create endpoint
+    path('notifications/', NotificationListView.as_view(), name='notification-list'),
+    path('notifications/<int:pk>/read/', mark_notification_read, name='notification-read'),
+    #payment
+    path("payments/create/", PaymentCreateAPIView.as_view(), name="payment-create"),
 
+
+    # #operator_analytics urls
+    # path('operator_analytics/', operator_analytics, name='operator_analytics'),
+    # path('overall_analitic/',  analytics_api, name='overall_analitic'),
+
+    # Router bilan viewsetlar
     path('', include(router.urls)),
-    path('accounts/', include('allauth.socialaccount.urls')),
-    path('register/', register, name='register'),
-
-    path('success/', success, name='success'),
-    path('apply/', LeadCreateView.as_view(), name='lead-apply'),
-
-
-
 
 ]
+
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

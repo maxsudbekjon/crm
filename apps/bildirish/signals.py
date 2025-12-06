@@ -1,13 +1,13 @@
 from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
-from apps.models import Lead, Enrollment
+from apps.models import Lead, enrollment
 from apps.tasks import process_lead_commission, add_penalty
 
 
 @receiver(pre_save, sender=Lead)
 def cache_old_status(sender, instance, **kwargs):
     if instance.id:
-        instance._old_status = Lead.objects.filter(id=instance.id)\
+        instance._old_status = lead.objects.filter(id=instance.id)\
                                 .values_list("status", flat=True).first()
     else:
         instance._old_status = None

@@ -1,128 +1,141 @@
 from django.contrib import admin
-from django.utils.safestring import mark_safe
+from apps.models import (
+    Branch, Call, Contract, Course, Lead, Operator,
+    Payment, OperatorMonthlySalary, SMS, Task, Notification, Penalty
+)
 
-from apps.models import Branch, Operator, Lead, Task, Penalty, SMS, Contract, Notification, Call, Course, Enrollment
-from .tasks import process_lead_commission
+# ===========================
+# INLINE CONFIGURATIONS
+# ===========================
 
-from django.contrib import admin
-from apps.models import Branch, Operator, Lead, Task, Penalty, SMS, Contract
+class PaymentInline(admin.TabularInline):
+    model = Payment
+    extra = 0
+    readonly_fields = ("amount", "created_at", "commission_added")
+
+
+class CallInline(admin.TabularInline):
+    model = Call
+    extra = 0
+    readonly_fields = ("call_time",)
+
+
+class SMSInline(admin.TabularInline):
+    model = SMS
+    extra = 0
+    readonly_fields = ("sent_at", "delivered")
+
+
+class TaskInline(admin.TabularInline):
+    model = Task
+    extra = 0
+    readonly_fields = ("deadline", "is_completed")
+
+
+
 
 
 @admin.register(Branch)
 class BranchAdmin(admin.ModelAdmin):
-    list_display = ('name', 'location', 'created_at', 'updated_at')
-    search_fields = ('name', 'location')
-    readonly_fields = ('created_at', 'updated_at')
-    ordering = ('name',)
+    list_display = ("id", "name", "location", "created_at")
+    search_fields = ("name", "location")
 
 
-from django.contrib import admin
-from django.utils.safestring import mark_safe
-from .models import Operator, Lead, Course
+@admin.register(Course)
+class CourseAdmin(admin.ModelAdmin):
+    list_display = ("id", "title", "price", "created_at")
+    search_fields = ("title",)
+    list_filter = ("created_at",)
+
+
+@admin.register(Lead)
+class LeadAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "full_name", "phone", "status", "operator", "course",
+        "demo_date", "last_contact_date", "created_at", 'commission_added'
+    )
+    search_fields = ("full_name", "phone")
+    list_filter = ("status", "operator", "course", "created_at")
+    inlines = [PaymentInline, CallInline, SMSInline, TaskInline]
 
 
 @admin.register(Operator)
 class OperatorAdmin(admin.ModelAdmin):
     list_display = (
-        'user', 'status', 'total_lead_amount','commission_rate', 'gender', 'salary', 'penalty', 'branch', 'photo_tag', 'created_at'
+        "id", "user", "status", "gender", "branch",
+        "salary", "commission_rate", "penalty", "created_at"
     )
-
-    search_fields = ('user__username', 'user__first_name', 'user__last_name')
-    list_filter = ('status', 'gender', 'branch', 'course')  # kurs bo‘yicha filter qo‘shildi
-    readonly_fields = ('created_at', 'updated_at')
-    ordering = ('user',)
-
-    def total_lead_amount(self, obj):
-        from django.db.models import Sum
-        total = Lead.objects.filter(operator=obj, status='sold').aggregate(total=Sum('amount'))['total']
-        return total or 0
-
-    total_lead_amount.short_description = "Umumiy Amount"
-
-    def photo_tag(self, obj):
-        if obj.photo:
-            return mark_safe(f'<img src="{obj.photo.url}" width="50" height="50" style="border-radius:5px;" />')
-        return "-"
-
-    photo_tag.short_description = 'Photo'
+    search_fields = ("user__username",)
+    list_filter = ("status", "gender", "branch")
 
 
-@admin.register(Lead)
-class LeadAdmin(admin.ModelAdmin):
-    list_display = ('full_name', 'phone', 'course', 'operator', 'status', 'source', 'demo_date', 'last_contact_date', 'amount')
-    list_filter = ('status', 'course', 'operator', 'source')
-    search_fields = ('full_name', 'phone', 'operator__user__username')
-    ordering = ('-demo_date',)
-    readonly_fields = ('created_at', 'updated_at')
-    fields = ('full_name', 'phone', 'course', 'operator', 'amount', 'status', 'source', 'demo_date', 'last_contact_date')
+@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    list_display = ("id", "lead", "amount", "commission_added", "created_at")
+    list_filter = ("commission_added", "created_at")
+    search_fields = ("lead__full_name",)
+    readonly_fields = ("created_at", "commission_added")
 
-
-
-@admin.register(Task)
-class TaskAdmin(admin.ModelAdmin):
-    list_display = ('title', 'operator', 'lead', 'is_completed', 'deadline', 'penalty_points', 'created_at',
-                    'updated_at')
-    list_filter = ('is_completed', 'deadline')
-    search_fields = ('title', 'operator__full_name', 'lead__full_name')
-    readonly_fields = ('created_at', 'updated_at')
 
 
 
 @admin.register(Penalty)
 class PenaltyAdmin(admin.ModelAdmin):
-    list_display = ('operator', 'task', 'reason', 'points', 'created_at')
-    search_fields = ('operator__full_name', 'task__title', 'reason')
-    readonly_fields = ('created_at',)
+    list_display = ("id", "operator", "task", "reason", "points", "created_at")
+    list_filter = ("operator", "task", "created_at")
+    search_fields = ("operator__full_name", "reason")
+    readonly_fields = ("created_at",)
+
+    ordering = ("-created_at",)
 
 
+@admin.register(OperatorMonthlySalary)
+class OperatorMonthlySalaryAdmin(admin.ModelAdmin):
+    list_display = ("id", "operator", "month", "commission", "updated_at")
+    search_fields = ("operator__user__username",)
+    list_filter = ("month", "operator")
 
-@admin.register(SMS)
-class SMSAdmin(admin.ModelAdmin):
-    list_display = ('lead', 'operator', 'content', 'sent_at', 'delivered', 'error_message')
-    search_fields = ('lead__full_name', 'operator__full_name', 'content')
-    list_filter = ('delivered',)
-    readonly_fields = ('sent_at',)
+
+@admin.register(Call)
+class CallAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "operator", "lead", "result",
+        "call_time", "duration_seconds"
+    )
+    search_fields = ("lead__full_name", "operator__user__username")
+    list_filter = ("result", "operator", "call_time")
 
 
 @admin.register(Contract)
 class ContractAdmin(admin.ModelAdmin):
-    list_display = ('course_name', 'operator', 'lead', 'start_date', 'end_date', 'amount_paid', 'created_at',
-                    'updated_at')
-    search_fields = ('course_name', 'lead__user__first_name', 'lead__user__last_name')
-    readonly_fields = ('created_at', 'updated_at')
-
-admin.site.register(Notification)
-
-@admin.register(Call)
-class CallAdmin(admin.ModelAdmin):
-    list_display = ('call_time', 'duration_seconds', 'result')
-    list_filter = ('call_time', 'duration_seconds', 'result')
-    search_fields = ('call_time', 'duration_seconds', 'result')
-    readonly_fields = ('call_time', 'duration_seconds')
+    list_display = ("id", "lead", "course_name", "amount_paid", "start_date", "end_date")
+    search_fields = ("lead__full_name", "course_name")
+    list_filter = ("start_date", "end_date")
 
 
-
-@admin.register(Course)
-class CourseAdmin(admin.ModelAdmin):
-    list_display = ('title', 'price', 'created_at')  # admin panelida ko‘rinadigan ustunlar
-    search_fields = ('title',)  # qidiruv maydoni
-    list_filter = ('created_at',)  # filtrlash maydoni
-    ordering = ('created_at',)
-
-from django.contrib import admin
-from .models import Enrollment
-
-@admin.register(Enrollment)
-class EnrollmentAdmin(admin.ModelAdmin):
-    list_display = ('student_name', 'operator', 'course', 'price_paid', 'created_at')
-    ordering = ('-created_at',)  # yangi -> eski
-    list_filter = ('operator', 'course', 'created_at')
-    search_fields = ('student_name', 'operator__user__first_name', 'operator__user__last_name')
+@admin.register(SMS)
+class SMSAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "lead", "operator", "sent_at",
+        "delivered", "provider_sms_sid"
+    )
+    search_fields = ("lead__phone", "operator__user__username")
+    list_filter = ("delivered", "sent_at")
 
 
-@admin.action(description="Run lead commission calculation")
-def run_commission(modeladmin, request, queryset):
-    from apps.tasks import process_lead_commission
-    process_lead_commission()
-    modeladmin.message_user(request, "Komissiya hisoblandi")
+@admin.register(Task)
+class TaskAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "title", "operator", "lead",
+        "deadline", "is_completed", "penalty_given"
+    )
+    search_fields = ("title", "operator__user__username")
+    list_filter = ("is_completed", "deadline")
+    readonly_fields = ("completed_at",)
 
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "task", "is_read", "created_at")
+    search_fields = ("user__username",)
+    list_filter = ("is_read",)

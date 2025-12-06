@@ -5,23 +5,20 @@ from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import authenticate, logout, update_session_auth_hash, get_user_model
 from rest_framework_simplejwt.tokens import RefreshToken
 from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
 import random
-
-from .serializers import (
-    RegisterSerializer, LoginSerializer, ProfileUpdateSerializer,
-    PasswordChangeSerializer, ForgotPasswordSerializer,
-    VerifyResetCodeSerializer, ResetPasswordSerializer
-)
+from django.core.mail import send_mail
+from .serializers import *
 
 User = get_user_model()
 
-
-# 🟢 SIGNUP
+# ------------------------
+# SIGNUP
+# ------------------------
 class SignupView(APIView):
     @swagger_auto_schema(
         operation_summary="Ro‘yxatdan o‘tish",
         request_body=RegisterSerializer,
-        responses={201: "Ro‘yxatdan o‘tish muvaffaqiyatli!", 400: "Xatolik"}
     )
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -35,18 +32,20 @@ class SignupView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# 🟢 LOGIN
+# ------------------------
+# LOGIN
+# ------------------------
 class LoginView(APIView):
     @swagger_auto_schema(
         operation_summary="Tizimga kirish (login)",
         request_body=LoginSerializer,
-        responses={200: "Tizimga muvaffaqiyatli kirdingiz!", 400: "Login yoki parol noto‘g‘ri"}
     )
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
             username = serializer.validated_data['username']
             password = serializer.validated_data['password']
+            role = serializer.validated_data['role']
             user = authenticate(username=username, password=password)
             if user:
                 refresh = RefreshToken.for_user(user)
@@ -55,46 +54,50 @@ class LoginView(APIView):
                     "tokens": {
                         "refresh": str(refresh),
                         "access": str(refresh.access_token),
+                        "role": role
                     }
                 })
             return Response({"error": "Login yoki parol noto‘g‘ri"}, status=400)
         return Response(serializer.errors, status=400)
 
 
-# 🟢 LOGOUT
+# ------------------------
+# LOGOUT
+# ------------------------
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
         operation_summary="Tizimdan chiqish",
-        responses={200: "Tizimdan chiqdingiz"}
     )
     def post(self, request):
         logout(request)
         return Response({"message": "Tizimdan chiqdingiz"}, status=200)
 
 
-# 🟢 PROFILE VIEW
+# ------------------------
+# PROFILE VIEW
+# ------------------------
 class ProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
         operation_summary="Profilni ko‘rish",
-        responses={200: RegisterSerializer}
     )
     def get(self, request):
         serializer = RegisterSerializer(request.user)
         return Response(serializer.data)
 
 
-# 🟢 PROFILE UPDATE
+# ------------------------
+# PROFILE UPDATE
+# ------------------------
 class ProfileUpdateView(APIView):
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
         operation_summary="Profilni to‘liq yangilash (PUT)",
         request_body=ProfileUpdateSerializer,
-        responses={200: "Profil yangilandi!"}
     )
     def put(self, request):
         serializer = ProfileUpdateSerializer(request.user, data=request.data)
@@ -106,7 +109,6 @@ class ProfileUpdateView(APIView):
     @swagger_auto_schema(
         operation_summary="Profilni qisman yangilash (PATCH)",
         request_body=ProfileUpdateSerializer,
-        responses={200: "Profil yangilandi!"}
     )
     def patch(self, request):
         serializer = ProfileUpdateSerializer(request.user, data=request.data, partial=True)
@@ -116,14 +118,15 @@ class ProfileUpdateView(APIView):
         return Response(serializer.errors, status=400)
 
 
-# 🟢 PASSWORD CHANGE
+# ------------------------
+# PASSWORD CHANGE
+# ------------------------
 class PasswordChangeView(APIView):
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
         operation_summary="Parolni o‘zgartirish",
-        request_body=PasswordChangeSerializer
-
+        request_body=PasswordChangeSerializer,
     )
     def put(self, request):
         serializer = PasswordChangeSerializer(data=request.data, context={'request': request})
@@ -134,12 +137,13 @@ class PasswordChangeView(APIView):
         return Response(serializer.errors, status=400)
 
 
-# 🟢 FORGOT PASSWORD (KOD YUBORISH)
+# ------------------------
+# FORGOT PASSWORD
+# ------------------------
 class ForgotPasswordView(APIView):
     @swagger_auto_schema(
         operation_summary="Parolni tiklash uchun kod yuborish",
         request_body=ForgotPasswordSerializer,
-        responses={200: "Kod yuborildi", 404: "Email topilmadi"}
     )
     def post(self, request):
         serializer = ForgotPasswordSerializer(data=request.data)
@@ -148,20 +152,33 @@ class ForgotPasswordView(APIView):
             user = User.objects.filter(email=email).first()
             if user:
                 code = str(random.randint(1000, 9999))
+
+                # Sessiyaga saqlaymiz
                 request.session['reset_user_id'] = user.id
                 request.session['reset_code'] = code
-                print(f"Parolni tiklash kodi: {code}")
-                return Response({"message": "Kod yuborildi (terminalda ko‘ring)."})
+
+                # ✉️ Email yuborish
+                send_mail(
+                    subject="Parolni tiklash kodingiz",
+                    message=f"Sizning parolni tiklash kodingiz: {code}",
+                    from_email=None,
+                    recipient_list=[email],
+                    fail_silently=False,
+                )
+
+                return Response({"message": "Kod emailga yuborildi."})
             return Response({"error": "Email topilmadi"}, status=404)
+
         return Response(serializer.errors, status=400)
 
 
-# 🟢 VERIFY RESET CODE
+# ------------------------
+# VERIFY RESET CODE
+# ------------------------
 class VerifyResetCodeView(APIView):
     @swagger_auto_schema(
         operation_summary="Kod to‘g‘riligini tekshirish",
         request_body=VerifyResetCodeSerializer,
-        responses={200: "Kod to‘g‘ri", 400: "Kod noto‘g‘ri"}
     )
     def post(self, request):
         serializer = VerifyResetCodeSerializer(data=request.data)
@@ -172,12 +189,15 @@ class VerifyResetCodeView(APIView):
                 return Response({"message": "Kod to‘g‘ri! Endi yangi parol kiriting."})
             return Response({"error": "Kod noto‘g‘ri"}, status=400)
         return Response(serializer.errors, status=400)
-# 🟢 RESET PASSWORD
+
+
+# ------------------------
+# RESET PASSWORD
+# ------------------------
 class ResetPasswordView(APIView):
     @swagger_auto_schema(
         operation_summary="Yangi parolni o‘rnatish",
         request_body=ResetPasswordSerializer,
-        responses={200: "Parol muvaffaqiyatli yangilandi!", 400: "Xato"}
     )
     def post(self, request):
         serializer = ResetPasswordSerializer(data=request.data, context={'request': request})

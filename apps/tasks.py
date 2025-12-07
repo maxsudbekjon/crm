@@ -137,12 +137,12 @@ def check_task_deadlines():
 
         if timedelta(minutes=9) < time_left <= timedelta(minutes=10) and not task.is_notified_10min:
             message = f"'{task.title}' topshirig'ingizga 10 daqiqa qoldi!"
-            create_and_send_notification(operator, message, data={"task_id": task.id, "rem": 10})
+            create_and_send_notification(operator, message, data={ "rem": 10}, task=task)
             task.is_notified_10min = True
             task.save(update_fields=['is_notified_10min'])
 
         elif timedelta(minutes=4) < time_left <= timedelta(minutes=5) and not task.is_notified_5min:
             message = f"'{task.title}' topshirig'ingizga 5 daqiqa qoldi!"
-            create_and_send_notification(operator, message, data={"task_id": task.id, "rem": 5})
+            create_and_send_notification(operator, message, data={"rem": 5}, task=task)
             task.is_notified_5min = True
             task.save(update_fields=['is_notified_5min'])

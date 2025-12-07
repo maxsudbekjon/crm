@@ -18,6 +18,7 @@ class TaskCreateAPIView(APIView):
         request_body=TaskSerializer,
         responses={201: TaskSerializer}
     )
+
     def post(self, request):
         if not hasattr(request.user, 'operator'):
             raise serializers.ValidationError("Ushbu foydalanuvchiga Operator bog‘lanmagan")

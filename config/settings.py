@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from celery.schedules import crontab
-from datetime import timedelta
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'django-insecure-so_eox^=#=syxam$$1cn!dv24u+4^6b-#e94n60z_r=d+h6gg%'
@@ -46,7 +46,7 @@ INSTALLED_APPS = [
 ]
 
 
-AUTH_USER_MODEL = 'user.CustomUser'
+AUTH_USER_MODEL = 'user.CustomUser'  # <-- user emas, users
 
 # ================= REST FRAMEWORK =====================
 REST_FRAMEWORK = {
@@ -56,20 +56,10 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
+        'rest_framework.permissions.IsAuthenticated',
     ],
 }
 
-SWAGGER_SETTINGS = {
-    'SECURITY_DEFINITIONS': {
-        'Bearer': {
-            'type': 'apiKey',
-            'name': 'Authorization',
-            'in': 'header'
-        }
-    },
-    'USE_SESSION_AUTH': False,
-}
 
 REST_USE_JWT = True
 
@@ -213,19 +203,20 @@ CELERY_ENABLE_UTC = False
 
 # Beat KERAK EMAS → OCHIRILADI
 
+from celery.schedules import crontab
+
+from celery.schedules import crontab
+
+from celery.schedules import crontab
 
 CELERY_BEAT_SCHEDULE = {
     'auto-penalty-check-every-minute': {
-        'task': 'apps.tasks.auto_deadline_penalty_checker',
+        'task': 'apps.tasks.auto_penalty_checker',
         'schedule': crontab(minute='*/1'),
     },
     'process-lead-commission-every-minute': {
         'task': 'apps.tasks.process_lead_commission_all_sold',
         'schedule': crontab(minute='*/1'),
-    },
-    'compute-commissions-monthly': {
-        'task': 'crm.tasks.compute_commissions_task',
-        'schedule': crontab(hour=1, minute=0, day_of_month='1'),
     },
 }
 LOGGING = {
@@ -242,14 +233,7 @@ LOGGING = {
     },
 }
 
-SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
-    'AUTH_HEADER_TYPES': ('Bearer',),
-    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
-}
+
 
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Asia/Tashkent'
@@ -263,16 +247,3 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'shohjaxonxabibullayev90@gmail.com'
-EMAIL_HOST_PASSWORD = 'your_app_password'
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
-
-
-
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'

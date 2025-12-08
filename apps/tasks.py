@@ -1,23 +1,11 @@
-from collections import defaultdict
-
-from django.shortcuts import redirect
-
-from apps.forms import EnrollmentForm
-from apps.models import Lead, Operator, enrollment
-
-
-from django.utils import timezone
-from datetime import timedelta
 from celery import shared_task
 from django.db import transaction
 from django.db.models import Count
 from collections import defaultdict
 
-from .models import Lead, Operator, Task
+from apps.models import Lead, Operator, Enrollment
 
-# =========================
-# Leadlarni operatorlarga taqsimlash
-# =========================
+
 @shared_task
 def distribute_leads_task():
     debug_info = {
@@ -53,15 +41,21 @@ def distribute_leads_task():
     for op in operators:
         operator_info = {
             'id': op.id,
-            'name': op.user.full_name,
+            'name': op.full_name,
             'eligible': False,
             'reason': None,
             'total_leads_handled': op.total_leads_count
         }
 
-        active_leads = op.leads.filter(status__in=["need_contact"]).count()
+        # Check for active leads with specific statuses
+        active_leads = op.leads.filter(
+            status__in=["need_contact"]
+        ).count()
+
+        # Check for unfinished tasks
         active_tasks = op.tasks.filter(is_completed=False).count()
 
+        # Determine eligibility
         if active_leads > 0:
             operator_info['reason'] = f"Has {active_leads} active lead(s)"
         elif active_tasks > 0:
@@ -74,14 +68,16 @@ def distribute_leads_task():
         debug_info['operator_details'].append(operator_info)
 
     debug_info['eligible_operators'] = len(eligible)
+
     if not eligible:
         debug_info['summary']['message'] = "No eligible operators found."
         return debug_info
 
-    # Step 4: Sort operators by total leads handled
+    # Step 4: Sort operators by total leads handled (least to most)
+    # This ensures fairness for remaining leads distribution
     eligible = sorted(eligible, key=lambda o: o.total_leads_count)
 
-    # Step 5: Round-robin distribution
+    # Step 5: Calculate distribution
     lead_count = len(leads)
     op_count = len(eligible)
     leads_per_operator = lead_count // op_count
@@ -89,31 +85,43 @@ def distribute_leads_task():
 
     debug_info['summary']['leads_per_operator'] = leads_per_operator
     debug_info['summary']['remaining_leads'] = remaining_leads
+    debug_info['summary']['distribution_note'] = (
+        f"Each operator gets {leads_per_operator} lead(s). "
+        f"Remaining {remaining_leads} lead(s) go to operators with fewest total leads."
+    )
 
+    # Step 6: Round-robin distribution with transaction safety
     with transaction.atomic():
         distribution_count = defaultdict(int)
         op_index = 0
 
         for i, lead in enumerate(leads):
+            # Select operator in round-robin fashion
             operator = eligible[op_index]
+
+            # Assign lead to operator
             lead.operator = operator
             lead.save()
+
             distribution_count[operator.id] += 1
 
             debug_info['distribution'].append({
                 'lead_id': lead.id,
                 'lead_name': lead.full_name,
                 'operator_id': operator.id,
-                'operator_name': operator.user.full_name,
+                'operator_name': operator.full_name,
                 'sequence': i + 1
             })
+
+            # Move to next operator (round-robin)
             op_index = (op_index + 1) % op_count
 
+    # Step 7: Generate summary statistics
     debug_info['summary']['total_assigned'] = len(leads)
     debug_info['summary']['assignments_per_operator'] = [
         {
             'operator_id': op.id,
-            'operator_name': op.user.full_name,
+            'operator_name': op.full_name,
             'leads_assigned': distribution_count[op.id],
             'previous_total': op.total_leads_count,
             'new_total': op.total_leads_count + distribution_count[op.id]
@@ -126,77 +134,160 @@ def distribute_leads_task():
 
     return debug_info
 
-@shared_task(name="apps.tasks.process_lead_commission_all_sold")
-def process_lead_commission_all_sold():
-    """
-    Barcha sold leadlar bo'yicha operatorlarga salary/komissiya hisoblaydi.
-    """
-    # 1) Barcha sold leadlar va operatori mavjud bo‘lganlarini olamiz
-    sold_leads = Lead.objects.filter(status="sold", operator__isnull=False)
+#         operator
 
-    # 2) Har bir lead bo‘yicha operator salary qo‘shiladi
-    for lead in sold_leads:
-        Operator.objects.filter(id=lead.operator.id).update(
-            salary=F('salary') + lead.commission_amount
-        )
-        print(f"Operator {lead.operator.id}: +{lead.commission_amount} added for Lead {lead.id}")
-
-    return f"Processed {sold_leads.count()} sold leads"
-
-from celery import shared_task
-from django.utils import timezone
+import logging
+from decimal import Decimal
 from django.db import transaction
 from django.db.models import F
-import logging
-
-from apps.models import Task, Operator
+from celery import shared_task
+from .models import Lead, Operator, Enrollment
 
 logger = logging.getLogger(__name__)
 
-@shared_task(name="apps.tasks.auto_deadline_penalty_checker")
-def auto_deadline_penalty_checker():
-    """
-    Deadline'dan 3 minut o'tgan, lekin hali bajarilmagan
-    va hali penalty berilmagan tasklar uchun operatorga penalty +1.
-    Race conditionlarni oldini olish uchun select_for_update va transaction ishlatiladi.
-    """
+# ===============================================================
+# 1️⃣ Lead commission task
+# ===============================================================
+from celery import shared_task
+from django.utils import timezone
+from apps.models import Lead, Operator
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def process_lead_commission(self, lead_id=None):
     try:
-        now = timezone.now()
-        threshold = now - timezone.timedelta(minutes=3)
+        # 1️⃣ Agar bitta lead berilgan bo‘lsa — faqat shuni ishlaymiz
+        if lead_id:
+            leads = Lead.objects.filter(id=lead_id, status='sold')
+        else:
+            # 2️⃣ Aks holda — barcha sold leadlarni olamiz
+            leads = Lead.objects.filter(status='sold')
 
-        # 1) Oxirgi holatlarni log qilamiz (debug uchun)
-        logger.info(f"Running auto_deadline_penalty_checker at {now}; threshold={threshold}")
+        for lead in leads:
+            operator = lead.operator
 
-        # 2) Olamiz: hali bajarilmagan, deadline 3+ minut o'tgan, penalty berilmagan
-        qs = Task.objects.filter(
-            is_completed=False,
-            deadline__lt=threshold,
-            penalty_given=False
-        )
+            # operator yo‘q bo‘lsa davom etamiz
+            if not operator:
+                continue
 
-        if not qs.exists():
-            logger.info("No expired tasks requiring penalty.")
-            return
+            # 3️⃣ Course dan narx olish
+            course_price = lead.course.price if lead.course else 0
 
-        # 3) Xavfsiz yangilash: select_for_update bilan zanjir
-        with transaction.atomic():
-            # select_for_update bilan rowlarni qulflaymiz
-            tasks = list(qs.select_for_update(nowait=False))
+            # 4️⃣ Operatorning commission rate
+            commission_rate = operator.commission_rate or 0
+            # 5️⃣ Komissiya hisoblash
+            commission_amount = course_price * commission_rate
 
-            for task in tasks:
-                # yana tekshirib olinadi (double-check)
-                if task.is_completed or task.penalty_given:
-                    continue
+            # 6️⃣ Operatorga qo‘shish
+            operator.salary += commission_amount
+            operator.save(update_fields=['salary'])
 
-                # operatorga atomic increment qilamiz
-                Operator.objects.filter(pk=task.operator_id).update(penalty=F('penalty') + 1)
-
-                # task uchun penalty flag ni yangilaymiz
-                Task.objects.filter(pk=task.pk).update(penalty_given=True)
-
-                logger.info(f"Penalty qo‘shildi: Operator={task.operator_id}, Task={task.id}")
-
-        logger.info("Auto deadline penalty checker completed successfully.")
+        return "Commission hisoblandi!"
 
     except Exception as exc:
-        logger.exception(f"auto_deadline_penalty_checker xatosi: {exc}")
+        raise self.retry(exc=exc)
+
+
+# ===============================================================
+# 2️⃣ Barcha sold leadlar uchun task
+# ===============================================================
+@shared_task(name="apps.tasks.process_lead_commission_all_sold")
+def process_lead_commission_all_sold():
+    try:
+        sold_ids = Lead.objects.filter(status='sold').values_list('id', flat=True)
+        if not sold_ids:
+            logger.info("Sold lead topilmadi.")
+            return
+
+        for lead_id in sold_ids:
+            if lead_id is not None:
+                process_lead_commission.delay(int(lead_id))
+
+        logger.info(f"{len(sold_ids)} ta sold lead commission taskiga yuborildi.")
+
+    except Exception as exc:
+        logger.error(f"process_lead_commission_all_sold xatosi: {exc}")
+
+
+# ===============================================================
+# 3️⃣ Salary + penalty qayta hisoblash (Enrollments asosida)
+# ===============================================================
+@shared_task(name="apps.tasks.update_all_operator_salary_penalty")
+def update_all_operator_salary_penalty():
+    try:
+        operators = Operator.objects.all()
+        for op in operators:
+            enrollments = Enrollment.objects.filter(operator=op)
+
+            total_commission = sum(
+                Decimal(e.price_paid) * Decimal(getattr(op, "commission_rate", 0.10))
+                for e in enrollments
+            )
+
+            with transaction.atomic():
+                op.salary = total_commission
+                op.penalty = enrollments.count()
+                op.save(update_fields=['salary', 'penalty'])
+
+            logger.info(f"Operator {op.id}: salary={op.salary}, penalty={op.penalty}")
+
+    except Exception as exc:
+        logger.error(f"update_all_operator_salary_penalty xatosi: {exc}")
+
+
+# ===============================================================
+# 4️⃣ Auto penalty checker (har operatorga +1 penalty)
+# ===============================================================
+@shared_task(name="apps.tasks.auto_penalty_checker")
+def auto_penalty_checker():
+    try:
+        operators = Operator.objects.all()
+        for op in operators:
+            op.penalty += 1
+            op.save(update_fields=['penalty'])
+
+        logger.info("Auto penalty checker ishladi.")
+
+    except Exception as exc:
+        logger.error(f"auto_penalty_checker xatosi: {exc}")
+
+
+# ===============================================================
+# 5️⃣ Bulk penalty (barcha operatorlarga)
+# ===============================================================
+@shared_task(name="apps.tasks.add_penalty_to_all_bulk")
+def add_penalty_to_all_bulk(points: int = 1):
+    try:
+        updated = Operator.objects.update(penalty=F('penalty') + points)
+        logger.info(f"Bulk penalty qo‘shildi: {points}, updated={updated}")
+
+    except Exception as exc:
+        logger.error(f"add_penalty_to_all_bulk xatosi: {exc}")
+
+
+# ===============================================================
+# 6️⃣ Enrollment commission task (operatorga foiz qo‘shish)
+# ===============================================================
+@shared_task
+def add_commission_task(enrollment_id):
+    enrollment = Enrollment.objects.get(id=enrollment_id)
+    operator = enrollment.operator
+    if operator:
+        commission_amount = enrollment.price_paid * operator.commission_rate / 100
+        operator.commission_total += commission_amount
+        operator.save()
+        logger.info(f"Operator {operator.id} ga {commission_amount} commission qo‘shildi.")
+
+
+# ===============================================================
+# 7️⃣ Specific operatorga penalty qo‘shish task
+# ===============================================================
+@shared_task(name="apps.tasks.add_penalty")
+def add_penalty(operator_id: int, points: int = 1):
+    try:
+        op = Operator.objects.get(id=operator_id)
+        op.penalty += points
+        op.save(update_fields=['penalty'])
+        logger.info(f"Operator {op.id} ga {points} ball penalty qo‘shildi")
+    except Operator.DoesNotExist:
+        logger.warning(f"Operator {operator_id} topilmadi")

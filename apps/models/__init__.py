@@ -7,3 +7,6 @@ from .operator import *
 from .penalty import *
 from .sms import *
 from .task_model import *
+from .course import *
+from .payment_salary import *
+from .enrollment import *

@@ -13,13 +13,16 @@ urlpatterns = [
     path('operator-create/', OperatorCreateView.as_view(), name='operator-create'),
     path('OperatorList/', OperatorListView.as_view(), name='operator-list'),
     path('OperatorDetail/<int:pk>/', OperatorDetailView.as_view(), name='operator-detail'),
+    path('Operator/salaries/', OperatorSalaryListAPIView.as_view(), name='operator-salaries'),
     # Lead endpoints
     path('leads/create/', LeadCreateView.as_view(), name='lead-create'),
     path('leads/', LeadListView.as_view(), name='lead-list'),
-    path('leads/<int:pk>/update-status/', LeadUpdateStatusView.as_view(), name='lead-update-status'),
+    path('leads/<int:pk>/update-status/', LeadStatusUpdateAPIView.as_view(), name='lead-update-status'),
+    path('leads/sold/', SoldLeadsAPIView.as_view(), name='sold-leads'),
 
     path('tasks/create/', TaskCreateAPIView.as_view(), name='task-create'),
-    path('tasks/sold-payments/', SoldClientsPaymentsAPIView.as_view(), name='sold-payments'),
+    path('tasks/list/', TaskListAPIView.as_view(), name='task-list'),
+    path('Payment/Create/', PaymentCreateAPIView.as_view(), name='payemnt-create'),
 
     # Task create endpoint (viewset bilan ishlatilmaydigan alohida)
     path('notifications/', NotificationListView.as_view(), name='notification-list'),

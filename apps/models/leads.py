@@ -1,8 +1,8 @@
+from typing import Any
 from django.db import models
-
 from apps.models.base import Base
 from apps.models.operator import Operator
-
+from apps.models.course import Course
 
 class Lead(Base):
     class Status(models.TextChoices):
@@ -17,16 +17,23 @@ class Lead(Base):
 
     full_name = models.CharField(max_length=150)
     phone = models.CharField(max_length=20, unique=True)
-    status = models.CharField(max_length=50, choices=Status.choices, default='new')
+    status = models.CharField(max_length=50, choices=Status.choices, default=Status.NEED_CONTACT)
     operator = models.ForeignKey(Operator, on_delete=models.SET_NULL, null=True, blank=True, related_name="leads")
     source = models.CharField(max_length=100, blank=True, null=True)
+    course = models.ForeignKey(Course, on_delete=models.SET_NULL, null=True, blank=True, related_name="leads")
     demo_date = models.DateTimeField(blank=True, null=True)
     last_contact_date = models.DateTimeField(blank=True, null=True)
+    commission_added = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-created_at']
         verbose_name = "Lead"
         verbose_name_plural = "Leadlar"
 
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self.price = None
+
     def __str__(self):
-        return f"{self.full_name} ({self.get_status_display()})"
+        return f"{self.full_name} ({self.status})"

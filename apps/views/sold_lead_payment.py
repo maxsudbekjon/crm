@@ -1,38 +1,69 @@
-from django.db.models import Sum
-from drf_yasg import openapi
-from drf_yasg.utils import swagger_auto_schema
-from rest_framework import permissions, status
-from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status, permissions
+from django.shortcuts import get_object_or_404
+from django.utils.dateparse import parse_date
+from apps.models import OperatorMonthlySalary
+from apps.serializers import  PaymentCreateSerializer, OperatorSalarySerializer
+from apps.utils import first_day_of_month
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+from drf_spectacular.utils import extend_schema, OpenApiExample, OpenApiRequest
+from apps.serializers import PaymentCreateSerializer
+from django.contrib.auth import get_user_model
 
-from apps.models import Lead
+CustomUser = get_user_model()
 
 
-class SoldClientsPaymentsAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+class IsAdmin(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.is_admin
+
+
+class PaymentCreateAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsAdmin]
 
     @swagger_auto_schema(
-        responses={200: openapi.Response(
-            description="Payment results",
-            examples={"application/json": [{"lead_id": 1, "total_payment": 500000}]}
-        )}
+        operation_summary="Payment yaratish",
+        operation_description="Faqat Admin foydalanuvchilar Payment yarata oladi.",
+        request_body=PaymentCreateSerializer,
+        responses={
+            201: openapi.Response(
+                description="Payment yaratildi",
+                schema=PaymentCreateSerializer
+            ),
+            403: openapi.Response(
+                description="Ruxsat yo‘q",
+                examples={
+                    "application/json": {
+                        "detail": "You do not have permission to perform this action."
+                    }
+                }
+            ),
+        },
     )
+    def post(self, request):
+        serializer = PaymentCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payment = serializer.save()
+
+        return Response(
+            {
+                "message": "Payment muvaffaqiyatli yaratildi.",
+                "payment": PaymentCreateSerializer(payment).data
+            },
+            status=status.HTTP_201_CREATED
+        )
+
+class OperatorSalaryListAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
     def get(self, request):
-        sold_leads = Lead.objects.filter(status='sold')
-        results = []
+        # 🔥 Operator – faqat o‘zini ko‘radi
+        if not request.user.is_admin:
+            salaries = OperatorMonthlySalary.objects.filter(operator=request.user)
+        else:
+            salaries = OperatorMonthlySalary.objects.all()
 
-        for lead in sold_leads:
-            total_payment = lead.payment_set.aggregate(total=Sum('amount'))['total'] or 0
-            operator = lead.operator
-            operator_bonus = operator.salary * 0.1 if operator and hasattr(operator, 'salary') else 0
-
-            results.append({
-                'lead_id': lead.id,
-                'lead_name': lead.full_name,
-                'total_payment': total_payment,
-                'operator_id': operator.id if operator else None,
-                'operator_name': operator.user.full_name if operator else None,
-                'operator_bonus': operator_bonus
-            })
-        return Response(results, status=status.HTTP_200_OK)
-
+        serializer = OperatorSalarySerializer(salaries, many=True)
+        return Response(serializer.data)

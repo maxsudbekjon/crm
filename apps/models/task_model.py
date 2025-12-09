@@ -1,8 +1,9 @@
-from datetime import timezone
 from django.db import models
 from apps.models.base import Base
 from apps.models.leads import Lead
 from apps.models.operator import Operator
+from Auth.models import CustomUser
+from django.utils import timezone
 
 
 class Task(Base):
@@ -13,9 +14,9 @@ class Task(Base):
     deadline = models.DateTimeField()
     is_completed = models.BooleanField(default=False)
     completed_at = models.DateTimeField(blank=True, null=True)
-    penalty_points = models.IntegerField(default=0)
     is_notified_10min = models.BooleanField(default=False)
     is_notified_5min = models.BooleanField(default=False)
+    penalty_given = models.BooleanField(default=False)  # 🔥 yangi
 
     def mark_completed(self):
         self.is_completed = True
@@ -28,7 +29,7 @@ class Task(Base):
         return f"{self.title} ({'Bajarilgan' if self.is_completed else 'Bajarilmagan'})"
 
 class Notification(Base):
-    user = models.ForeignKey(Operator, on_delete=models.CASCADE, related_name='notifications')
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='notifications')
     task = models.ForeignKey('Task', on_delete=models.CASCADE, null=True, blank=True, related_name='notifications')
     message = models.TextField()
     data = models.JSONField(null=True, blank=True)
@@ -36,4 +37,4 @@ class Notification(Base):
 
 
     def __str__(self):
-        return f"Notif to {self.user.user.username}: {self.message[:50]}"
+        return f"Notif to {self.user.username}: {self.message[:50]}"

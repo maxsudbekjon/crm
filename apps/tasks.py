@@ -146,3 +146,162 @@ def check_task_deadlines():
             create_and_send_notification(operator, message, data={"rem": 5}, task=task)
             task.is_notified_5min = True
             task.save(update_fields=['is_notified_5min'])
+
+
+#         operator
+
+import logging
+from decimal import Decimal
+from django.db import transaction
+from django.db.models import F
+from celery import shared_task
+from .models import Lead, Operator, Enrollment
+
+logger = logging.getLogger(__name__)
+
+# ===============================================================
+# 1️⃣ Lead commission task
+# ===============================================================
+from celery import shared_task
+from django.utils import timezone
+from apps.models import Lead, Operator
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def process_lead_commission(self, lead_id=None):
+    try:
+        # 1️⃣ Agar bitta lead berilgan bo‘lsa — faqat shuni ishlaymiz
+        if lead_id:
+            leads = Lead.objects.filter(id=lead_id, status='sold')
+        else:
+            # 2️⃣ Aks holda — barcha sold leadlarni olamiz
+            leads = Lead.objects.filter(status='sold')
+
+        for lead in leads:
+            operator = lead.operator
+
+            # operator yo‘q bo‘lsa davom etamiz
+            if not operator:
+                continue
+
+            # 3️⃣ Course dan narx olish
+            course_price = lead.course.price if lead.course else 0
+
+            # 4️⃣ Operatorning commission rate
+            commission_rate = operator.commission_rate or 0
+            # 5️⃣ Komissiya hisoblash
+            commission_amount = course_price * commission_rate
+
+            # 6️⃣ Operatorga qo‘shish
+            operator.salary += commission_amount
+            operator.save(update_fields=['salary'])
+
+        return "Commission hisoblandi!"
+
+    except Exception as exc:
+        raise self.retry(exc=exc)
+
+
+# ===============================================================
+# 2️⃣ Barcha sold leadlar uchun task
+# ===============================================================
+@shared_task(name="apps.tasks.process_lead_commission_all_sold")
+def process_lead_commission_all_sold():
+    try:
+        sold_ids = Lead.objects.filter(status='sold').values_list('id', flat=True)
+        if not sold_ids:
+            logger.info("Sold lead topilmadi.")
+            return
+
+        for lead_id in sold_ids:
+            if lead_id is not None:
+                process_lead_commission.delay(int(lead_id))
+
+        logger.info(f"{len(sold_ids)} ta sold lead commission taskiga yuborildi.")
+
+    except Exception as exc:
+        logger.error(f"process_lead_commission_all_sold xatosi: {exc}")
+
+
+# ===============================================================
+# 3️⃣ Salary + penalty qayta hisoblash (Enrollments asosida)
+# ===============================================================
+@shared_task(name="apps.tasks.update_all_operator_salary_penalty")
+def update_all_operator_salary_penalty():
+    try:
+        operators = Operator.objects.all()
+        for op in operators:
+            enrollments = Enrollment.objects.filter(operator=op)
+
+            total_commission = sum(
+                Decimal(e.price_paid) * Decimal(getattr(op, "commission_rate", 0.10))
+                for e in enrollments
+            )
+
+            with transaction.atomic():
+                op.salary = total_commission
+                op.penalty = enrollments.count()
+                op.save(update_fields=['salary', 'penalty'])
+
+            logger.info(f"Operator {op.id}: salary={op.salary}, penalty={op.penalty}")
+
+    except Exception as exc:
+        logger.error(f"update_all_operator_salary_penalty xatosi: {exc}")
+
+
+# ===============================================================
+# 4️⃣ Auto penalty checker (har operatorga +1 penalty)
+# ===============================================================
+@shared_task(name="apps.tasks.auto_penalty_checker")
+def auto_penalty_checker():
+    try:
+        operators = Operator.objects.all()
+        for op in operators:
+            op.penalty += 1
+            op.save(update_fields=['penalty'])
+
+        logger.info("Auto penalty checker ishladi.")
+
+    except Exception as exc:
+        logger.error(f"auto_penalty_checker xatosi: {exc}")
+
+
+# ===============================================================
+# 5️⃣ Bulk penalty (barcha operatorlarga)
+# ===============================================================
+@shared_task(name="apps.tasks.add_penalty_to_all_bulk")
+def add_penalty_to_all_bulk(points: int = 1):
+    try:
+        updated = Operator.objects.update(penalty=F('penalty') + points)
+        logger.info(f"Bulk penalty qo‘shildi: {points}, updated={updated}")
+
+    except Exception as exc:
+        logger.error(f"add_penalty_to_all_bulk xatosi: {exc}")
+
+
+# ===============================================================
+# 6️⃣ Enrollment commission task (operatorga foiz qo‘shish)
+# ===============================================================
+@shared_task
+def add_commission_task(enrollment_id):
+    enrollment = Enrollment.objects.get(id=enrollment_id)
+    operator = enrollment.operator
+    if operator:
+        commission_amount = enrollment.price_paid * operator.commission_rate / 100
+        operator.commission_total += commission_amount
+        operator.save()
+        logger.info(f"Operator {operator.id} ga {commission_amount} commission qo‘shildi.")
+
+
+# ===============================================================
+# 7️⃣ Specific operatorga penalty qo‘shish task
+# ===============================================================
+@shared_task(name="apps.tasks.add_penalty")
+def add_penalty(operator_id: int, points: int = 1):
+    try:
+        op = Operator.objects.get(id=operator_id)
+        op.penalty += points
+        op.save(update_fields=['penalty'])
+        logger.info(f"Operator {op.id} ga {points} ball penalty qo‘shildi")
+    except Operator.DoesNotExist:
+        logger.warning(f"Operator {operator_id} topilmadi")

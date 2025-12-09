@@ -8,14 +8,19 @@ from apps.models import Lead
 class LeadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lead
-        fields = ['id', 'full_name', 'phone', 'status', 'operator', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'operator', 'created_at', 'updated_at']
+        fields = "__all__"
+        read_only_fields = ['operator']
+
+    def update(self, instance, validated_data):
+        # operator faqat birinchi yaratishda belgilanadi
+        validated_data["operator"] = instance.operator
+        return super().update(instance, validated_data)
 
 
 class LeadCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lead
-        fields = ['id', 'full_name', 'phone', 'operator']
+        fields = ['full_name', 'phone', 'source']
 
 
 class LeadStatusUpdateSerializer(serializers.ModelSerializer):
@@ -24,14 +29,14 @@ class LeadStatusUpdateSerializer(serializers.ModelSerializer):
         fields = ['status']
 
     def validate(self, attrs):
-        request = self.context.get('request')
-        if not request.user.is_authenticated:
-            raise serializers.ValidationError("Login qilishingiz kerak!")
-
+        new_status = attrs.get("status")
         lead = self.instance
-        operator = getattr(request.user, 'operator', None)
 
-        if lead.operator != operator:
-            raise serializers.ValidationError("Siz faqat o‘zingizga biriktirilgan leadni yangilashingiz mumkin.")
+        # agar status 'sold' bo‘lsa → leadda payment bo‘lishi shart
+        if new_status == Lead.Status.SOLD:
+            if not lead.payments.exists():
+                raise serializers.ValidationError(
+                    {"status": "Lead uchun to‘lov mavjud emas. Sold qilish taqiqlanadi."}
+                )
+
         return attrs
-

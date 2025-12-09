@@ -62,6 +62,7 @@ MIDDLEWARE = [
     'allauth.account.middleware.AccountMiddleware',
 ]
 
+
 # =========================
 # URL and templates
 # =========================
@@ -203,6 +204,14 @@ CELERY_BEAT_SCHEDULE = {
     'distribute-leads-everyday-23pm': {
         'task': 'apps.tasks.distribute_leads_task',
         'schedule': crontab(hour=15, minute=3),
+    },
+    'auto-penalty-check-every-minute': {
+        'task': 'apps.tasks.auto_penalty_checker',
+        'schedule': crontab(minute='*/1'),
+    },
+    'process-lead-commission-every-minute': {
+        'task': 'apps.tasks.process_lead_commission_all_sold',
+        'schedule': crontab(minute='*/1'),
     },
 }
 

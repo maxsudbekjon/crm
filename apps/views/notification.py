@@ -22,9 +22,15 @@ class NotificationListView(generics.ListAPIView):
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
 
-    def get_queryset(self):
-        return Notification.objects.filter(user=self.request.user).order_by('-created_at')
+    # def get_queryset(self):
+    #     return Notification.objects.filter(user=self.request.user.operator).order_by('-created_at')
 
+    def get_queryset(self):
+        operator = getattr(self.request.user, "operator", None)
+        if not operator:
+            return Notification.objects.none()
+
+        return Notification.objects.filter(user=operator).order_by('-created_at')
 
 @swagger_auto_schema(
     method='post',
@@ -33,13 +39,20 @@ class NotificationListView(generics.ListAPIView):
     ],
     responses={200: openapi.Response('Notification marked as read')}
 )
+
+
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def mark_notification_read(request, pk):
+    operator = getattr(request.user, "operator", None)
+    if not operator:
+        return Response({"detail": "Operator not found"}, status=404)
+
     try:
-        notif = Notification.objects.get(pk=pk, user=request.user)
+        notif = Notification.objects.get(pk=pk, user=operator)
     except Notification.DoesNotExist:
         return Response({"detail": "Not found"}, status=404)
+
     notif.is_read = True
     notif.save(update_fields=['is_read'])
     return Response({"ok": True})

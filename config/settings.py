@@ -1,8 +1,14 @@
-
+import os
+import sys
 from pathlib import Path
 from datetime import timedelta
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+sys.path.append(os.path.join(BASE_DIR, 'apps'))
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
@@ -84,10 +90,15 @@ ASGI_APPLICATION = 'config.asgi.application'  # Channels uchun
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'crm_db',
+        'USER': 'postgres',
+        'PASSWORD': '1',
+        'HOST': 'postgres_service',
+        'PORT': '5432',
     }
 }
 
@@ -150,7 +161,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',
     ],
-    'DATETIME_FORMAT': "%Y-%m-%d %H:%M:%S",
+    # 'DATETIME_FORMAT': "%Y-%m-%d %H:%M:%S",
 }
 
 # =========================
@@ -170,15 +181,15 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [("127.0.0.1", 6379)],
+            "hosts": [("redis", 6379)],
         },
     },
 }
 
 
 from celery.schedules import crontab
-CELERY_BROKER_URL = 'redis://127.0.0.1:6379/1'
-CELERY_RESULT_BACKEND = 'redis://127.0.0.1:6379/2'
+CELERY_BROKER_URL = 'redis://redis:6379/1'
+CELERY_RESULT_BACKEND = 'redis://redis:6379/2'
 
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
@@ -192,7 +203,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     'distribute-leads-everyday-23pm': {
         'task': 'apps.tasks.distribute_leads_task',
-        'schedule': crontab(hour=14, minute=23),
+        'schedule': crontab(hour=15, minute=3),
     },
     'auto-penalty-check-every-minute': {
         'task': 'apps.tasks.auto_penalty_checker',

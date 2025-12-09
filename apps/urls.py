@@ -26,7 +26,7 @@ urlpatterns = [
 
     # Task create endpoint (viewset bilan ishlatilmaydigan alohida)
     path('notifications/', NotificationListView.as_view(), name='notification-list'),
-    path('notifications/<int:pk>/read/', mark_notification_read, name='notification-read'),
+    path('notifications/read/', mark_notification_read, name='notification-read'),
 
     #operator_analytics urls
     path('operator_analytics/', operator_analytics, name='operator_analytics'),
@@ -34,7 +34,6 @@ urlpatterns = [
 
     # Router bilan viewsetlar
     path('', include(router.urls)),
-
 ]
 
 if settings.DEBUG:

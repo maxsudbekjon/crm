@@ -3,7 +3,7 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from .models import Notification, Operator
 
-def create_and_send_notification(operator: Operator, message, data=None):
+def create_and_send_notification(operator: Operator, message, task=None ,data=None):
     """
     Operator uchun notification yaratadi va WebSocket orqali yuboradi
     """
@@ -15,6 +15,7 @@ def create_and_send_notification(operator: Operator, message, data=None):
     try:
         notif = Notification.objects.create(
             user=operator,  # faqat Operator
+            task=task,
             message=message,
             data=data or {}
         )

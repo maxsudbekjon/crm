@@ -142,7 +142,7 @@ def analytics_api(request):
     ).count()
 
     month_created = Lead.objects.filter(
-        created_at__gte=now - timedelta(days=30)
+        created_at__gte=now - datetime.timedelta(days=30)
     ).count()
 
     data = {

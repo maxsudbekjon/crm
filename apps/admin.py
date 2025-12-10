@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.utils.safestring import mark_safe
-from apps.models import Branch, Operator, Lead, Task, Penalty, SMS, Contract, Notification, Call, Course, Enrollment
+from apps.models import Branch, Operator, Lead, Task, Penalty, SMS, Contract, Notification, Call, Course, Enrollment, \
+    Payment
 from apps.tasks import process_lead_commission
 
 @admin.register(Branch)
@@ -22,7 +23,9 @@ class OperatorAdmin(admin.ModelAdmin):
 
     def total_lead_amount(self, obj):
         from django.db.models import Sum
-        total = Lead.objects.filter(operator=obj, status='sold').aggregate(total=Sum('amount'))['total']
+        total = Payment.objects.filter(
+        lead__operator=obj
+        ).aggregate(total=Sum('amount'))['total']
         return total or 0
 
     total_lead_amount.short_description = "Umumiy Amount"

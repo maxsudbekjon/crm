@@ -250,36 +250,6 @@ def update_all_operator_salary_penalty():
 
 
 # ===============================================================
-# 4️⃣ Auto penalty checker (har operatorga +1 penalty)
-# ===============================================================
-@shared_task(name="apps.tasks.auto_penalty_checker")
-def auto_penalty_checker():
-    try:
-        operators = Operator.objects.all()
-        for op in operators:
-            op.penalty += 1
-            op.save(update_fields=['penalty'])
-
-        logger.info("Auto penalty checker ishladi.")
-
-    except Exception as exc:
-        logger.error(f"auto_penalty_checker xatosi: {exc}")
-
-
-# ===============================================================
-# 5️⃣ Bulk penalty (barcha operatorlarga)
-# ===============================================================
-@shared_task(name="apps.tasks.add_penalty_to_all_bulk")
-def add_penalty_to_all_bulk(points: int = 1):
-    try:
-        updated = Operator.objects.update(penalty=F('penalty') + points)
-        logger.info(f"Bulk penalty qo‘shildi: {points}, updated={updated}")
-
-    except Exception as exc:
-        logger.error(f"add_penalty_to_all_bulk xatosi: {exc}")
-
-
-# ===============================================================
 # 6️⃣ Enrollment commission task (operatorga foiz qo‘shish)
 # ===============================================================
 @shared_task
@@ -293,15 +263,81 @@ def add_commission_task(enrollment_id):
         logger.info(f"Operator {operator.id} ga {commission_amount} commission qo‘shildi.")
 
 
-# ===============================================================
-# 7️⃣ Specific operatorga penalty qo‘shish task
-# ===============================================================
-@shared_task(name="apps.tasks.add_penalty")
-def add_penalty(operator_id: int, points: int = 1):
-    try:
-        op = Operator.objects.get(id=operator_id)
-        op.penalty += points
-        op.save(update_fields=['penalty'])
-        logger.info(f"Operator {op.id} ga {points} ball penalty qo‘shildi")
-    except Operator.DoesNotExist:
-        logger.warning(f"Operator {operator_id} topilmadi")
+
+from django.utils import timezone
+from datetime import timedelta
+from celery import shared_task
+from apps.models import Task, Lead, Penalty, Operator
+
+
+# -----------------------------------------------------
+# 1) TASK DEADLINE PENALTY
+# -----------------------------------------------------
+@shared_task(name="apps.tasks.check_task_deadlines_penalty")
+def check_task_deadlines_penalty():
+    now = timezone.now()
+
+    # deadline o‘tgan + 3 min, lekin penalty hali berilmagan tasklar
+    tasks = Task.objects.filter(
+        is_completed=False,
+        penalty_given=False,
+        deadline__lt=now - timezone.timedelta(minutes=3)
+    )
+
+    for task in tasks:
+        operator = task.operator
+
+        # Penalty yozamiz
+        Penalty.objects.create(
+            operator=operator,
+            task=task,
+            reason="Task deadline missed",
+            points=1
+        )
+
+        # Operatorga jarima qo‘shamiz
+        operator.penalty += 1
+        operator.save(update_fields=['penalty'])
+
+        # Taskga endi penalty berilmasligi uchun flag qo‘yiladi
+        task.penalty_given = True
+        task.save(update_fields=['penalty_given'])
+
+    return f"{tasks.count()} ta task uchun penalty berildi."
+
+
+# -----------------------------------------------------
+# 2) OPERATOR 7 KUN LEADGA UMMUMAN QO‘NG‘IROQ QILMAGAN PENALTY
+# -----------------------------------------------------
+@shared_task(name="apps.tasks.check_lead_no_call_penalty")
+def check_lead_no_call_penalty():
+    now = timezone.now()
+    seven_days_ago = now - timedelta(days=7)
+
+    # 7 kundan beri umuman qo‘ng‘iroq bo‘lmagan leadlar
+    leads = Lead.objects.filter(
+        penalty_given=False,
+        created_at__lt=seven_days_ago,
+        last_called_at__isnull=True  # operator 1 marta ham bog‘lanmagan
+    )
+
+    for lead in leads:
+        operator = lead.operator
+
+        # Penalty yozamiz
+        Penalty.objects.create(
+            operator=operator,
+            lead=lead,
+            reason="Operator has not called the lead for 7 days",
+            points=1
+        )
+
+        # Operator ballini oshiramiz
+        operator.penalty += 1
+        operator.save(update_fields=['penalty'])
+
+        # Endi keyin yana penalty berilmasligi uchun flag
+        lead.penalty_given = True
+        lead.save(update_fields=['penalty_given'])
+
+    return f"{leads.count()} ta lead uchun 7 kun qo‘ng‘iroq qilinmaganligi uchun penalty berildi."

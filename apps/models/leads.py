@@ -25,6 +25,7 @@ class Lead(Base):
     last_contact_date = models.DateTimeField(blank=True, null=True)
     commission_added = models.BooleanField(default=False)
 
+
     class Meta:
         ordering = ['-created_at']
         verbose_name = "Lead"

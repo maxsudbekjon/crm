@@ -53,18 +53,23 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError('Iltimos, username va password kiriting')
 
         user = authenticate(username=username, password=password)
-        user_role =user.role
+
+        # Birinchi user mavjudligini tekshirish kerak
         if not user:
-            raise serializers.ValidationError("Noto'g'ri login yoki parol")
+            raise serializers.ValidationError("Ushbu foydalanuvchi ro'yxatdan o'tmagan yoki login/parol noto'g'ri")
+
         if not user.is_active:
             raise serializers.ValidationError('Foydalanuvchi faol emas')
 
+        # Faqat user mavjud bo'lsa role tekshiramiz
+        user_role = user.role
         if not user_role:
             raise serializers.ValidationError("Admin sizga hali role bermagan")
 
         attrs['user'] = user
         attrs['role'] = user_role
         return attrs
+
 
 class ProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:

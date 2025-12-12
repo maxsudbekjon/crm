@@ -30,6 +30,8 @@ urlpatterns = [
 
     #operator_analytics urls
     path('operator_analytics/', operator_analytics, name='operator_analytics'),
+    path('dashboard/', DashboardAPIView.as_view(), name='dashboard'),
+    path("operator/statistics/", OperatorStatisticsAPIView.as_view(), name="operator-statistics"),
     path('overall_analitic/',  analytics_api, name='overall_analitic'),
 
     # Router bilan viewsetlar

@@ -1,94 +1,57 @@
+
 services:
+  web:
+    build: .
+    restart: always
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+    ports:
+      - "8001:8000"
+    depends_on:
+      - postgres_service
+      - redis
+    environment:
+      POSTGRES_NAME: crm_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1
+      POSTGRES_HOST: postgres_service
+      POSTGRES_PORT: 5432
+
   postgres_service:
     image: postgres:15
     restart: always
     environment:
-      POSTGRES_DB: crm_db  # ✅ To'g'ri nom
+      POSTGRES_DB: crm_postgres_service
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: 1
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d crm_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
 
   redis:
-    image: redis/redis-stack:latest
+    image: redis:alpine
     restart: always
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
-  web:
-    build: .
-    restart: always
-    command: >
-      sh -c "
-        python manage.py makemigrations &&
-        python manage.py migrate &&
-        python manage.py runserver 0.0.0.0:8000
-      "
-    volumes:
-      - .:/app
-    ports:
-      - "8001:8000"
-    depends_on:
-      postgres_service:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment:
-      POSTGRES_NAME: crm_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 1
-      POSTGRES_HOST: postgres_service
-      POSTGRES_PORT: 5432
 
   celery:
     build: .
-    restart: always
     command: celery -A config worker --loglevel=INFO
     volumes:
       - .:/app
     depends_on:
-      web:
-        condition: service_started
-      redis:
-        condition: service_healthy
-      postgres_service:
-        condition: service_healthy
-    environment:
-      POSTGRES_NAME: crm_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 1
-      POSTGRES_HOST: postgres_service
-      POSTGRES_PORT: 5432
+      - web
+      - redis
+      - postgres_service
 
   beat:
     build: .
-    restart: always
     command: celery -A config beat --loglevel=INFO
     volumes:
       - .:/app
     depends_on:
-      redis:
-        condition: service_healthy
-      postgres_service:
-        condition: service_healthy
-    environment:
-      POSTGRES_NAME: crm_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 1
-      POSTGRES_HOST: postgres_service
-      POSTGRES_PORT: 5432
+      - redis
+      - postgres_service
 
 volumes:
   postgres_data:

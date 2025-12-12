@@ -62,3 +62,24 @@ def get_or_create_operator_salary(operator, dt):
         month=month,
     )
     return salary
+
+from datetime import date, timedelta
+from django.utils.timezone import make_aware
+import calendar
+
+
+def first_day_of_month(dt: date):
+    return date(dt.year, dt.month, 1)
+
+
+def last_day_of_month(dt: date):
+    last_day = calendar.monthrange(dt.year, dt.month)[1]
+    return date(dt.year, dt.month, last_day)
+
+
+def month_range(month_date: date):
+    """Return (start, end) for a given month."""
+    start = first_day_of_month(month_date)
+    end = last_day_of_month(month_date)
+    return make_aware(datetime.datetime.combine(start, datetime.time.min)), \
+           make_aware(datetime.datetime.combine(end, datetime.time.max))

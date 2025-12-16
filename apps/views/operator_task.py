@@ -7,7 +7,6 @@ from apps.models.task_model import Task
 from apps.serializers.task_serializers import TaskSerializer
 
 
-# =========================
 # Task Views
 # =========================
 
@@ -33,12 +32,4 @@ class TaskCreateAPIView(APIView):
 
         serializer.save(operator=operator)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-class TaskListAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        tasks = Task.objects.filter(operator=request.user.operator)
-        serializer = TaskSerializer(tasks, many=True)
-        return Response({'Topshiriqlar:':serializer.data, 'status':status.HTTP_200_OK})
 

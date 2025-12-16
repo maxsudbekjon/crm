@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     # Ichki
     'Auth',
     'apps',
+    'core',
 
     # Tashqi
     'rest_framework',
@@ -91,14 +92,11 @@ ASGI_APPLICATION = 'config.asgi.application'  # Channels uchun
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 
+
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'crm_db',
-        'USER': 'postgres',
-        'PASSWORD': '1',
-        'HOST': 'postgres_service',
-        'PORT': '5432',
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 
@@ -151,6 +149,8 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
     'Auth.backends.UsernameOrEmailOrPhoneBackend',
 ]
+# settings.py
+
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -158,11 +158,26 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ],
+
+    "DEFAULT_PAGINATION_CLASS": "core.pagination.StandardResultsSetPagination",
+    "PAGE_SIZE": 20,
+
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',
     ],
+    # Swagger va schema uchun
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',  # swagger uchun
     # 'DATETIME_FORMAT': "%Y-%m-%d %H:%M:%S",
 }
+
+# drf-spectacular sozlamalari
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'CRM API',
+    'DESCRIPTION': 'CRM FRAME 30 API documentation',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': True,
+}
+
 
 # =========================
 # JWT

@@ -1,41 +1,67 @@
-from django.urls import path, include
+from django.urls import path
 from rest_framework.routers import DefaultRouter
-from django.conf.urls.static import static
-from config import settings
-from .views import *
 
-app_name = "apps"
+from .views import (
+    OperatorCreateView, OperatorListView, OperatorDetailView,
+    OperatorSalaryListAPIView, LeadCreateView, LeadListView,
+    LeadStatusUpdateAPIView, SoldLeadsAPIView, TaskCreateAPIView,
+    PaymentCreateAPIView, NotificationListView,
+    mark_notification_read, operator_analytics, analytics_api
+)
+from apps.views.demodars import DemoLessonListView, LeadDemoAssignmentCreateView
+from apps.views.operator_status import OperatorStatsAPIView
+from apps.views.lead_filter import LeadFilterAPIView
+from apps.views.call_qongiroq import MyCallsAPIView
+from rest_framework.routers import DefaultRouter
 
-# DRF router bilan viewsetlar
-router = DefaultRouter()
+from .views.dashboard import DashboardAPIView
+from .views.operator_dashboard import OperatorsDashboardAPIView
+from .views.task_topshiriq import TaskListAPIView
+
 urlpatterns = [
-    #operator
-    path('operator-create/', OperatorCreateView.as_view(), name='operator-create'),
-    path('OperatorList/', OperatorListView.as_view(), name='operator-list'),
-    path('OperatorDetail/<int:pk>/', OperatorDetailView.as_view(), name='operator-detail'),
-    path('Operator/salaries/', OperatorSalaryListAPIView.as_view(), name='operator-salaries'),
-    # Lead endpoints
-    path('leads/create/', LeadCreateView.as_view(), name='lead-create'),
-    path('leads/', LeadListView.as_view(), name='lead-list'),
-    path('leads/<int:pk>/update-status/', LeadStatusUpdateAPIView.as_view(), name='lead-update-status'),
-    path('leads/sold/', SoldLeadsAPIView.as_view(), name='sold-leads'),
+    # operator
+    path('operator-create/', OperatorCreateView.as_view()),
+    path('operator-list/', OperatorListView.as_view()),
+    path('operator/<int:pk>/', OperatorDetailView.as_view()),
+    path('operator/salaries/', OperatorSalaryListAPIView.as_view()),
 
-    path('tasks/create/', TaskCreateAPIView.as_view(), name='task-create'),
-    path('tasks/list/', TaskListAPIView.as_view(), name='task-list'),
-    path('Payment/Create/', PaymentCreateAPIView.as_view(), name='payemnt-create'),
+    # lead
+    path('leads/create/', LeadCreateView.as_view()),
+    path('leads/', LeadListView.as_view()),
+    path('leads/<int:pk>/update-status/', LeadStatusUpdateAPIView.as_view()),
+    path('leads/sold/', SoldLeadsAPIView.as_view()),
 
-    # Task create endpoint (viewset bilan ishlatilmaydigan alohida)
-    path('notifications/', NotificationListView.as_view(), name='notification-list'),
-    path('notifications/read/', mark_notification_read, name='notification-read'),
+    path("leads/filter/<str:period>/", LeadFilterAPIView.as_view()),
 
-    #operator_analytics urls
-    path('operator_analytics/', operator_analytics, name='operator_analytics'),
-    path('overall_analitic/',  analytics_api, name='overall_analitic'),
+    path('tasks/filter/<str:filter_by>/', TaskListAPIView.as_view(), name='task-list-filter'),
 
-    # Router bilan viewsetlar
-    path('', include(router.urls)),
+    path("calls/my/", MyCallsAPIView.as_view()),
+
+    path("dashboard/operators/", OperatorsDashboardAPIView.as_view()),
+    path("dashboard/", DashboardAPIView.as_view()),
+
+    path("operator/stats/", OperatorStatsAPIView.as_view(),name="operator-stats"),
+
+    # tasks
+    path('tasks/create/', TaskCreateAPIView.as_view()),
+
+    # payment
+    path('payment/create/', PaymentCreateAPIView.as_view()),
+
+    path('demo-lessons/', DemoLessonListView.as_view(), name='demo-lessons-list'),
+
+
+    # Leadga demo dars biriktirish
+    path('assign-demo/', LeadDemoAssignmentCreateView.as_view(), name='assign-demo'),
+
+
+    # notifications
+    path('notifications/', NotificationListView.as_view()),
+    path('notifications/read/', mark_notification_read),
+
+    # analytics
+    path('operator-analytics/', operator_analytics),
+    path('overall-analytic/', analytics_api),
+
+
 ]
-
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-

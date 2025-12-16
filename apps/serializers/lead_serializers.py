@@ -8,8 +8,9 @@ from apps.models import Lead
 class LeadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lead
-        fields = "__all__"
         read_only_fields = ['operator']
+        fields = ['id', 'full_name', 'phone', 'status', 'source', 'course', 'demo_date', 'last_contact_date']
+
 
     def update(self, instance, validated_data):
         # operator faqat birinchi yaratishda belgilanadi

@@ -13,10 +13,8 @@ class OperatorSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Operator
-        fields = [
-            'id', 'user', 'status',
-            'salary', 'penalty', 'gender', 'branch'
-        ]
+        fields = ['id', 'user', 'status', 'photo', 'salary', 'commission_rate', 'penalty', 'gender', 'branch']
+
 
     def create(self, validated_data):
         user_data = validated_data.pop('user')
@@ -35,4 +33,6 @@ class OperatorSerializer(serializers.ModelSerializer):
         rep['branch'] = instance.branch.name if instance.branch else None
         # rep['photo'] = instance.photo.url if instance.photo else None
         return rep
+
+
 

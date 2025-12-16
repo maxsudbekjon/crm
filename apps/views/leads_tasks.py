@@ -96,3 +96,5 @@ class SoldLeadsAPIView(generics.ListAPIView):
             operator__user=self.request.user,   # <— Asosiy tuzatish
             status="sold"
         )
+
+

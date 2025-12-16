@@ -125,3 +125,20 @@ def run_commission(modeladmin, request, queryset):
     from apps.tasks import process_lead_commission
     process_lead_commission()
     modeladmin.message_user(request, "Komissiya hisoblandi")
+
+
+
+from django.contrib import admin
+from apps.models.demodars import DemoLesson, LeadDemoAssignment
+
+@admin.register(DemoLesson)
+class DemoLessonAdmin(admin.ModelAdmin):
+    list_display = ("course", "teacher", "start_at", "is_active")
+    list_filter = ("course", "teacher", "is_active")
+    search_fields = ("course__name", "teacher__username")
+
+@admin.register(LeadDemoAssignment)
+class LeadDemoAssignmentAdmin(admin.ModelAdmin):
+    list_display = ("lead", "demo", "assigned_by", "assigned_at")
+    list_filter = ("assigned_at", "assigned_by")
+    search_fields = ("lead__name", "demo__course__name")

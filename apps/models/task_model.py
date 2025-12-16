@@ -16,7 +16,11 @@ class Task(Base):
     completed_at = models.DateTimeField(blank=True, null=True)
     is_notified_10min = models.BooleanField(default=False)
     is_notified_5min = models.BooleanField(default=False)
-    penalty_given = models.BooleanField(default=False)  # 🔥 yangi
+    penalty_given = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-deadline', '-created_at']
+        # 🔥 yangi
 
     def mark_completed(self):
         self.is_completed = True
@@ -27,6 +31,9 @@ class Task(Base):
 
     def __str__(self):
         return f"{self.title} ({'Bajarilgan' if self.is_completed else 'Bajarilmagan'})"
+
+
+
 
 class Notification(Base):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='notifications')

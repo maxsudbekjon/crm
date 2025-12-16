@@ -2,13 +2,14 @@ import datetime
 
 from django.db.models import Sum, Count, Q
 from django.http import JsonResponse
-from django.utils import timezone
+from django.utils.dateparse import parse_date
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from django.utils import timezone
 
-from apps.models import Operator, Lead, Task, Contract, SMS, Call, Penalty
+from apps.models import Operator, Lead, Task, Contract, SMS, Call, Penalty, Payment
 
 
 # =========================
@@ -23,6 +24,7 @@ from apps.models import Operator, Lead, Task, Contract, SMS, Call, Penalty
     operation_description="Bitta operator uchun kunlik va oylik analitika (calls, messages va o‘qiyotganlar bilan birga)",
     responses={200: openapi.Response(description="Operator analitika natijasi")}
 )
+
 @api_view(['GET'])
 def operator_analytics(request):
     operator_id = request.GET.get('operator_id')
@@ -100,60 +102,50 @@ def operator_analytics(request):
     return JsonResponse(result, safe=False)
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 def analytics_api(request):
-    now = timezone.now()
 
-    # 1 hafta va 1 oy ichida sotilgan leadlar
-    week_sold = Lead.objects.filter(
-        status=Lead.Status.SOLD,
-        updated_at__gte=now - timedelta(days=7)
-    ).count()
+    month_param = request.query_params.get("month")
 
-    month_sold = Lead.objects.filter(
-        status=Lead.Status.SOLD,
-        updated_at__gte=now - timedelta(days=30)
-    ).count()
+    if month_param:
+        month = parse_date(month_param + "-01")
+    else:
+        today = timezone.now().date()
+        month = today.replace(day=1)
 
-    # Eng ko'p lead olgan operator
-    top_operator_leads = (
-        Operator.objects.annotate(lead_count=Count('leads'))
-        .order_by('-lead_count')
-        .values('user__username', 'lead_count')
-        .first()
-    )
-
-    # Eng yaxshi sotgan operator
-    top_operator_sales = (
-        Operator.objects.annotate(
-            sold_count=Count('leads', filter=Q(leads__status=Lead.Status.SOLD))
+    operators_qs = (
+        Operator.objects
+        .select_related("user")
+        .annotate(
+            leads_count=Count("leads", distinct=True),
+            sold_count=Count(
+                "leads",
+                filter=Q(leads__status=Lead.Status.SOLD),
+                distinct=True
+            ),
+            daromad=Sum(
+                "monthly_salaries__commission",
+                filter=Q(monthly_salaries__month=month)
+            ),
+            calls_count=Count("calls", distinct=True),
         )
-        .order_by('-sold_count')
-        .values('user__username', 'sold_count')
-        .first()
+        .filter(leads_count__gt=0)
     )
 
-    overall_leads = Lead.objects.all().count()
-    sold_leads = Lead.objects.filter(status=Lead.Status.SOLD).count()
+    data = []
+    for op in operators_qs:
+        data.append({
+            "operator": op.user.username,
+            "leads": op.leads_count,
+            "calls": op.calls_count,
+            "sold": op.sold_count,
+            "conversion": round(
+                (op.sold_count / op.leads_count) * 100, 1
+            ) if op.leads_count else 0,
+            "daromad": float(op.daromad or 0)
+        })
 
-    # Oxirgi 1 hafta va 1 oy ichida kelgan leadlar soni
-    week_created = Lead.objects.filter(
-        created_at__gte=now - timedelta(days=7)
-    ).count()
-
-    month_created = Lead.objects.filter(
-        created_at__gte=now - datetime.timedelta(days=30)
-    ).count()
-
-    data = {
-        "sold_last_week": week_sold,
-        "sold_last_month": month_sold,
-        "top_operator_by_leads": top_operator_leads,
-        "top_operator_by_sales": top_operator_sales,
-        "lead_created_last_week": week_created,
-        "lead_created_last_month": month_created,
-        "overall_leads": overall_leads,
-        "sold_leads": sold_leads
-    }
-
-    return Response(data)
+    return Response({
+        "month": month,
+        "operators": data
+    })

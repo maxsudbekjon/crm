@@ -1,4 +1,6 @@
 from rest_framework import permissions
+from rest_framework.permissions import BasePermission
+
 
 class IsAssignedOperator(permissions.BasePermission):
     """
@@ -8,7 +10,6 @@ class IsAssignedOperator(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         return obj.operator == request.user.operator
 
-from rest_framework.permissions import BasePermission
 
 class LeadListPermission(BasePermission):
     """

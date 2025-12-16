@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_date
-from apps.models import OperatorMonthlySalary
+from apps.models import OperatorMonthlySalary, Operator
 from apps.serializers import  PaymentCreateSerializer, OperatorSalarySerializer
 from apps.utils import first_day_of_month
 from drf_yasg.utils import swagger_auto_schema
@@ -67,3 +67,19 @@ class OperatorSalaryListAPIView(APIView):
 
         serializer = OperatorSalarySerializer(salaries, many=True)
         return Response(serializer.data)
+
+
+
+class OperatorSalaryAPIView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if request.user.is_admin:
+            salaries = OperatorMonthlySalary.objects.all()
+        else:
+            operator = get_object_or_404(Operator, user=request.user)
+            salaries = OperatorMonthlySalary.objects.filter(operator=operator)
+
+        serializer = OperatorSalarySerializer(salaries, many=True)
+        return Response(serializer.data)
+

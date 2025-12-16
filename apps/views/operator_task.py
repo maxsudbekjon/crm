@@ -1,6 +1,8 @@
 from django.utils import timezone
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import permissions, serializers, status
+from rest_framework.generics import ListAPIView
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from apps.models.task_model import Task
@@ -34,11 +36,25 @@ class TaskCreateAPIView(APIView):
         serializer.save(operator=operator)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-class TaskListAPIView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
 
-    def get(self, request):
-        tasks = Task.objects.filter(operator=request.user.operator)
-        serializer = TaskSerializer(tasks, many=True)
-        return Response({'Topshiriqlar:':serializer.data, 'status':status.HTTP_200_OK})
+class OperatorTaskListView(ListAPIView):
+    serializer_class = TaskSerializer
+    permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        operator = getattr(self.request.user, "operator", None)
+        if not operator:
+            return Task.objects.none()
+
+        # status path param orqali keladi
+        status_param = self.kwargs.get("status", "").strip().lower()
+        now = timezone.now()
+
+        queryset = Task.objects.filter(operator=operator).order_by('-deadline')
+
+        if status_param == "faol":
+            return queryset.filter(is_completed=False, deadline__gte=now)
+        elif status_param == "bajarildi":
+            return queryset.filter(is_completed=True)
+
+        return queryset

@@ -12,7 +12,7 @@ class Operator(Base):
         MALE = 'Male', 'Male'
         FEMALE = 'Female', 'Female'
 
-    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE)
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE,  related_name="operator")
     status = models.CharField(max_length=20, choices=StatusType.choices)
     photo = models.ImageField(upload_to='operator_photos/', blank=True, null=True)
     salary = models.DecimalField(max_digits=10, decimal_places=2, default=0)

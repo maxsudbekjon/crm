@@ -3,6 +3,9 @@ from rest_framework.routers import DefaultRouter
 from django.conf.urls.static import static
 from config import settings
 from .views import *
+from .views.call import MyCallsAPIView
+from .views.director import DirectorStatistics
+from .views.lead_history import LeadHistoryView
 
 app_name = "apps"
 
@@ -21,7 +24,7 @@ urlpatterns = [
     path('leads/sold/', SoldLeadsAPIView.as_view(), name='sold-leads'),
 
     path('tasks/create/', TaskCreateAPIView.as_view(), name='task-create'),
-    path('tasks/list/', TaskListAPIView.as_view(), name='task-list'),
+    path('tasks/list/tasks/<str:status>/', OperatorTaskListView.as_view(), name='task-list'),
     path('Payment/Create/', PaymentCreateAPIView.as_view(), name='payemnt-create'),
 
     # Task create endpoint (viewset bilan ishlatilmaydigan alohida)
@@ -34,6 +37,10 @@ urlpatterns = [
 
     # Router bilan viewsetlar
     path('', include(router.urls)),
+    path("leads_history/<int:lead_id>/", LeadHistoryView.as_view()),
+
+    path("my-calls/", MyCallsAPIView.as_view()),
+    path("director-statistics/", DirectorStatistics.as_view()),
 ]
 
 if settings.DEBUG:

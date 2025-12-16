@@ -14,12 +14,12 @@ class Call(Base):
         FAILED = "failed", "Failed"
 
     operator = models.ForeignKey(
-        Operator,
+        "apps.Operator",
         on_delete=models.CASCADE,
         related_name="calls"
     )
     lead = models.ForeignKey(
-        Lead,
+        "apps.Lead",
         on_delete=models.CASCADE,
         related_name="calls"
     )

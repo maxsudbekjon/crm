@@ -1,34 +1,22 @@
 from django.db.models import Sum
-from django.utils.timezone import localtime
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework import serializers
-
 from apps.models.call import Call
 from apps.serializers.call_qongiroq import CallSerializer
 
-
-# ===== API VIEW =====
 class MyCallsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
-        operator = getattr(user, "operator", None)
 
-        if not operator:
-            return Response({
-                "cards": {
-                    "jami": 0,
-                    "chiquvchi": 0,
-                    "otkazib_yuborilgan": 0,
-                    "jami_vaqt": "0 min 0 sek"
-                },
-                "calls": []
-            })
-
-        calls = Call.objects.filter(operator=operator).select_related("lead").order_by("-call_time")
+        # Admin/direktor barcha operatorlar qo‘ng‘iroqlarini ko‘radi
+        if user.role == "admin":
+            calls = Call.objects.all().select_related("lead", "operator").order_by("-call_time")
+        else:
+            # Operator faqat o‘z qo‘ng‘iroqlarini ko‘radi
+            calls = Call.objects.filter(operator=user).select_related("lead", "operator").order_by("-call_time")
 
         # ===== CARDS =====
         jami = calls.count()

@@ -1,15 +1,10 @@
-from django.db.models import Sum
 from django.utils.timezone import localtime
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 from rest_framework import serializers
-
 from apps.models.call import Call
 
-
-# ===== SERIALIZER =====
 class CallSerializer(serializers.ModelSerializer):
+    operator = serializers.SerializerMethodField()  # operator username olish uchun
+
     lead = serializers.CharField(source="lead.full_name")
     turi = serializers.SerializerMethodField()
     davomiyligi = serializers.SerializerMethodField()
@@ -18,7 +13,12 @@ class CallSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Call
-        fields = ["lead", "turi", "davomiyligi", "vaqt", "izoh"]
+        fields = ["operator", "lead", "turi", "davomiyligi", "vaqt", "izoh"]
+
+    def get_operator(self, obj):
+        if obj.operator and hasattr(obj.operator, 'user'):
+            return obj.operator.user.username
+        return "operator"  # null bo‘lsa
 
     def get_turi(self, obj):
         return "Chiquvchi" if obj.result == Call.CallResult.SUCCESSFUL else "O‘tkazib yuborilgan"

@@ -142,3 +142,4 @@ class LeadDemoAssignmentAdmin(admin.ModelAdmin):
     list_display = ("lead", "demo", "assigned_by", "assigned_at")
     list_filter = ("assigned_at", "assigned_by")
     search_fields = ("lead__name", "demo__course__name")
+

@@ -3,62 +3,70 @@ from django.utils.timezone import now, localtime
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from dateutil.relativedelta import relativedelta
-
-from apps.models import Course
 from apps.models.leads import Lead
 from apps.models.operator import Operator
 
-
-class DashboardAPIView(APIView):
+class DashboardMonthlyAPIView(APIView):
     def get(self, request):
-
-        today = localtime(now()).date()  # bugungi kun lokal vaqt bo‘yicha
+        today = localtime(now()).date()
+        current_year = today.year
+        current_month = today.month
 
         # ======================
-        # 1️⃣ CARDS (BUGUN)
+        # 1️⃣ CARDS (HOZIRGI OY)
         # ======================
-        jami_leadlar = Lead.objects.filter(
-            created_at__date=today
+        monthly_leads = Lead.objects.filter(
+            created_at__year=current_year,
+            created_at__month=current_month
         ).count()
 
-        jami_sotilgan = Lead.objects.filter(
+        monthly_sold = Lead.objects.filter(
             status=Lead.Status.SOLD,
-            created_at__date=today
+            created_at__year=current_year,
+            created_at__month=current_month
         )
 
-        # BUGUNGI KUN DAROMADI (kurs narxlari bo‘yicha)
-        bugungi_daromad = (
-                Lead.objects
-                .filter(
-                    created_at__date=today,
-                    course__isnull=False
-                )
-                .aggregate(total=Sum("course__price"))["total"] or 0
+        monthly_revenue = (
+            Lead.objects
+            .filter(
+                created_at__year=current_year,
+                created_at__month=current_month,
+                status=Lead.Status.SOLD,
+                course__isnull=False
+            )
+            .aggregate(total=Sum("course__price"))["total"] or 0
         )
 
-        aktiv_operatorlar = Operator.objects.count()
+        active_operators = Operator.objects.filter(
+            leads__created_at__year=current_year,
+            leads__created_at__month=current_month
+        ).distinct().count()
 
-        konversiya = (
-            round((jami_sotilgan.count() / jami_leadlar) * 100, 2)
-            if jami_leadlar else 0
+        conversion = (
+            round((monthly_sold.count() / monthly_leads) * 100, 2)
+            if monthly_leads else 0
         )
 
         # ======================
-        # 2️⃣ OPERATOR SAMARADORLIGI (BUGUN)
+        # 2️⃣ OPERATOR SAMARADORLIGI (TOP 5 HOZIRGI OY)
         # ======================
         operators = Operator.objects.select_related("user").annotate(
             total_leads=Count(
                 "leads",
-                filter=Q(leads__created_at__date=today)
+                filter=Q(
+                    leads__created_at__year=current_year,
+                    leads__created_at__month=current_month
+                )
             ),
             sold_leads=Count(
                 "leads",
                 filter=Q(
                     leads__status=Lead.Status.SOLD,
-                    leads__created_at__date=today
+                    leads__created_at__year=current_year,
+                    leads__created_at__month=current_month
                 )
             )
-        )
+        ).order_by('-sold_leads')[:5]
 
         operator_chart = []
         for op in operators:
@@ -72,25 +80,34 @@ class DashboardAPIView(APIView):
         # ======================
         # 3️⃣ OXIRGI 6 OYLIK DAROMAD
         # ======================
-        six_months_ago = now() - relativedelta(months=6)
+        six_months_ago = today - relativedelta(months=6)
+        revenue_last_6_months = []
 
-        oy6_daromad = (
-            Lead.objects
-            .filter(
-                status=Lead.Status.SOLD,
-                created_at__gte=six_months_ago,
-                course__isnull=False
+        for i in range(6):
+            month_date = today - relativedelta(months=i)
+            month_revenue = (
+                Lead.objects
+                .filter(
+                    status=Lead.Status.SOLD,
+                    created_at__year=month_date.year,
+                    created_at__month=month_date.month,
+                    course__isnull=False
+                )
+                .aggregate(total=Sum("course__price"))["total"] or 0
             )
-            .aggregate(total=Sum("course__price"))["total"] or 0
-        )
+            revenue_last_6_months.append({
+                "year": month_date.year,
+                "month": month_date.month,
+                "daromad": round(month_revenue, 2)
+            })
 
         return Response({
             "cards": {
-                "bugungi_leadlar": jami_leadlar,
-                "bugungi_daromad": round(bugungi_daromad, 2),
-                "aktiv_operatorlar": aktiv_operatorlar,
-                "bugungi_konversiya": konversiya
+                "oylik_leadlar": monthly_leads,
+                "oylik_daromad": round(monthly_revenue, 2),
+                "aktiv_operatorlar": active_operators,
+                "oylik_konversiya": conversion
             },
             "operator_samaradorligi": operator_chart,
-            "oy6_daromad": round(oy6_daromad, 2)
+            "oy6_daromad": revenue_last_6_months
         })

@@ -1,5 +1,4 @@
 from django.db import models
-
 from apps.models.base import Base
 from apps.models.leads import Lead
 from apps.models.operator import Operator
@@ -38,4 +37,5 @@ class Call(Base):
         verbose_name_plural = "Qo‘ng‘iroqlar"
 
     def __str__(self):
+
         return f"{self.lead.full_name} bilan {self.operator.user.get_full_name()} ({self.get_result_display()})"

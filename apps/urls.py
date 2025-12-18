@@ -14,7 +14,7 @@ from apps.views.lead_filter import LeadFilterAPIView
 from apps.views.call_qongiroq import MyCallsAPIView
 from rest_framework.routers import DefaultRouter
 
-from .views.dashboard import DashboardAPIView
+from .views.dashboard import DashboardMonthlyAPIView
 from .views.operator_dashboard import OperatorsDashboardAPIView
 from .views.task_topshiriq import TaskListAPIView
 
@@ -38,7 +38,7 @@ urlpatterns = [
     path("calls/my/", MyCallsAPIView.as_view()),
 
     path("dashboard/operators/", OperatorsDashboardAPIView.as_view()),
-    path("dashboard/", DashboardAPIView.as_view()),
+    path("dashboard/status/", DashboardMonthlyAPIView.as_view()),
 
     path("operator/stats/", OperatorStatsAPIView.as_view(),name="operator-stats"),
 

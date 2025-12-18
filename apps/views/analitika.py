@@ -1,4 +1,5 @@
 import datetime
+from django.db.models import Sum, Q
 
 from django.db.models import Sum, Count, Q, ExpressionWrapper, FloatField, F, OuterRef, Subquery, DecimalField
 from django.db.models.functions import Cast
@@ -104,13 +105,15 @@ def operator_analytics(request):
 
 
 
+
+
+
 @api_view(["GET"])
 def analytics_api(request):
     # =========================
     # 1. Oyni aniqlash
     # =========================
     month_param = request.query_params.get("month")
-
     if month_param:
         month_start = parse_date(month_param + "-01")
     else:
@@ -123,101 +126,86 @@ def analytics_api(request):
         month_end = month_start.replace(month=month_start.month + 1)
 
     # =========================
-    # 2. Operator analytics
+    # 2. Leadlar (oy bo‘yicha)
     # =========================
-    operators_qs = (
-        Operator.objects
-        .select_related("user")
-        .annotate(
-            leads_count=Count(
-                "leads",
-                filter=Q(
-                    leads__created_at__gte=month_start,
-                    leads__created_at__lt=month_end
-                ),
-                distinct=True
-            ),
-            sold_count=Count(
-                "leads",
-                filter=Q(
-                    leads__status=Lead.Status.SOLD,
-                    leads__created_at__gte=month_start,
-                    leads__created_at__lt=month_end
-                ),
-                distinct=True
-            ),
-            calls_count=Count(
-                "calls",
-                filter=Q(
-                    calls__created_at__gte=month_start,
-                    calls__created_at__lt=month_end
-                ),
-                distinct=True
-            ),
-            daromad=Sum(
-                "monthly_salaries__commission",
-                filter=Q(monthly_salaries__month=month_start)
-            )
-        )
-        .filter(leads_count__gt=0)
+    leads_qs = Lead.objects.filter(
+        created_at__gte=month_start,
+        created_at__lt=month_end
+    ).select_related("course", "operator")
+
+    total_leads_count = leads_qs.count()
+    total_sold_leads_count = leads_qs.filter(status=Lead.Status.SOLD).count()
+
+    total_leads_sum = sum(
+        l.course.price for l in leads_qs if l.course
     )
 
-    # =========================
-    # 3. Summary (tepasi)
-    # =========================
-    total_leads = Lead.objects.filter(
-        created_at__gte=month_start,
-        created_at__lt=month_end
-    ).count()
-
-    sold_leads = Lead.objects.filter(
-        status=Lead.Status.SOLD,
-        created_at__gte=month_start,
-        created_at__lt=month_end
-    ).count()
+    sold_leads_sum = sum(
+        l.course.price for l in leads_qs
+        if l.course and l.status == Lead.Status.SOLD
+    )
 
     conversion = round(
-        (sold_leads / total_leads) * 100, 1
-    ) if total_leads else 0
-
-    active_operators = operators_qs.count()
-
-    total_daromad = (
-        Payment.objects
-        .filter(
-            created_at__gte=month_start,
-            created_at__lt=month_end
-        )
-        .aggregate(total=Sum("amount"))["total"] or 0
-    )
+        (total_sold_leads_count / total_leads_count) * 100, 1
+    ) if total_leads_count else 0
 
     # =========================
-    # 4. Operatorlar jadvali
+    # 3. Operatorlar bo‘yicha
     # =========================
     operators_data = []
-    for op in operators_qs:
-        operators_data.append({
-            "operator": op.user.username,
-            "leads": op.leads_count,
-            "calls": op.calls_count,
-            "sold": op.sold_count,
-            "conversion": round(
-                (op.sold_count / op.leads_count) * 100, 1
-            ) if op.leads_count else 0,
-            "daromad": float(op.daromad or 0)
-        })
+
+    operators = Operator.objects.select_related("user")
+    for op in operators:
+        op_leads = leads_qs.filter(operator=op)
+
+        op_total_leads_count = op_leads.count()
+        op_sold_leads_count = op_leads.filter(status=Lead.Status.SOLD).count()
+
+        op_leads_sum = sum(
+            l.course.price for l in op_leads if l.course
+        )
+
+        op_sold_sum = sum(
+            l.course.price for l in op_leads
+            if l.course and l.status == Lead.Status.SOLD
+        )
+
+        op_conversion = round(
+            (op_sold_leads_count / op_total_leads_count) * 100, 1
+        ) if op_total_leads_count else 0
+
+        op_daromad = op.monthly_salaries.filter(
+            month=month_start
+        ).aggregate(total=Sum("commission"))["total"] or 0
+
+        if op_total_leads_count > 0:
+            operators_data.append({
+                "operator": op.user.username,
+                "total_leads": op_total_leads_count,        # ✅ jami leadlar
+                "sold_leads": op_sold_leads_count,          # ✅ sotilgan leadlar
+                "leads_sum": float(op_leads_sum),           # ✅ jami summa
+                "sold_sum": float(op_sold_sum),
+                "conversion": op_conversion,
+                "daromad": float(op_daromad),
+            })
 
     # =========================
-    # 5. Response
+    # 4. Umumiy daromad
     # =========================
+    total_daromad = Payment.objects.filter(
+        created_at__gte=month_start,
+        created_at__lt=month_end
+    ).aggregate(total=Sum("amount"))["total"] or 0
+
     return Response({
         "month": month_start,
         "summary": {
-            "total_leads": total_leads,
+            "total_leads": total_leads_count,
+            "total_sold_leads": total_sold_leads_count,
+            "total_leads_sum": float(total_leads_sum),
             "total_daromad": float(total_daromad),
-            "active_operators": active_operators,
-            "conversion": conversion
+            "active_operators": len(operators_data),
+            "conversion": conversion,
         },
         "operators": operators_data
     })
-

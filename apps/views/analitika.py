@@ -1,6 +1,7 @@
 import datetime
 
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, ExpressionWrapper, FloatField, F, OuterRef, Subquery, DecimalField
+from django.db.models.functions import Cast
 from django.http import JsonResponse
 from django.utils.dateparse import parse_date
 from drf_yasg import openapi
@@ -9,7 +10,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.utils import timezone
 
-from apps.models import Operator, Lead, Task, Contract, SMS, Call, Penalty, Payment
+from apps.models import Operator, Lead, Task, Contract, SMS, Call, Penalty, Payment, OperatorMonthlySalary
 
 
 # =========================
@@ -102,39 +103,100 @@ def operator_analytics(request):
     return JsonResponse(result, safe=False)
 
 
+
 @api_view(["GET"])
 def analytics_api(request):
-
+    # =========================
+    # 1. Oyni aniqlash
+    # =========================
     month_param = request.query_params.get("month")
 
     if month_param:
-        month = parse_date(month_param + "-01")
+        month_start = parse_date(month_param + "-01")
     else:
         today = timezone.now().date()
-        month = today.replace(day=1)
+        month_start = today.replace(day=1)
 
+    if month_start.month == 12:
+        month_end = month_start.replace(year=month_start.year + 1, month=1)
+    else:
+        month_end = month_start.replace(month=month_start.month + 1)
+
+    # =========================
+    # 2. Operator analytics
+    # =========================
     operators_qs = (
         Operator.objects
         .select_related("user")
         .annotate(
-            leads_count=Count("leads", distinct=True),
+            leads_count=Count(
+                "leads",
+                filter=Q(
+                    leads__created_at__gte=month_start,
+                    leads__created_at__lt=month_end
+                ),
+                distinct=True
+            ),
             sold_count=Count(
                 "leads",
-                filter=Q(leads__status=Lead.Status.SOLD),
+                filter=Q(
+                    leads__status=Lead.Status.SOLD,
+                    leads__created_at__gte=month_start,
+                    leads__created_at__lt=month_end
+                ),
+                distinct=True
+            ),
+            calls_count=Count(
+                "calls",
+                filter=Q(
+                    calls__created_at__gte=month_start,
+                    calls__created_at__lt=month_end
+                ),
                 distinct=True
             ),
             daromad=Sum(
                 "monthly_salaries__commission",
-                filter=Q(monthly_salaries__month=month)
-            ),
-            calls_count=Count("calls", distinct=True),
+                filter=Q(monthly_salaries__month=month_start)
+            )
         )
         .filter(leads_count__gt=0)
     )
 
-    data = []
+    # =========================
+    # 3. Summary (tepasi)
+    # =========================
+    total_leads = Lead.objects.filter(
+        created_at__gte=month_start,
+        created_at__lt=month_end
+    ).count()
+
+    sold_leads = Lead.objects.filter(
+        status=Lead.Status.SOLD,
+        created_at__gte=month_start,
+        created_at__lt=month_end
+    ).count()
+
+    conversion = round(
+        (sold_leads / total_leads) * 100, 1
+    ) if total_leads else 0
+
+    active_operators = operators_qs.count()
+
+    total_daromad = (
+        Payment.objects
+        .filter(
+            created_at__gte=month_start,
+            created_at__lt=month_end
+        )
+        .aggregate(total=Sum("amount"))["total"] or 0
+    )
+
+    # =========================
+    # 4. Operatorlar jadvali
+    # =========================
+    operators_data = []
     for op in operators_qs:
-        data.append({
+        operators_data.append({
             "operator": op.user.username,
             "leads": op.leads_count,
             "calls": op.calls_count,
@@ -145,7 +207,17 @@ def analytics_api(request):
             "daromad": float(op.daromad or 0)
         })
 
+    # =========================
+    # 5. Response
+    # =========================
     return Response({
-        "month": month,
-        "operators": data
+        "month": month_start,
+        "summary": {
+            "total_leads": total_leads,
+            "total_daromad": float(total_daromad),
+            "active_operators": active_operators,
+            "conversion": conversion
+        },
+        "operators": operators_data
     })
+

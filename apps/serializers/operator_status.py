@@ -30,3 +30,14 @@ class OperatorStatsSerializer(serializers.ModelSerializer):
         if obj.leads_count == 0:
             return 0
         return round((obj.sold_count / obj.leads_count) * 100)
+
+from rest_framework import serializers
+
+class OperatorDataSerializer(serializers.Serializer):
+    xodim = serializers.CharField()
+    ish_boshlangan = serializers.CharField()
+    lavozim = serializers.CharField()
+    lead = serializers.IntegerField()
+    sotilgan = serializers.IntegerField()
+    konversiya = serializers.FloatField()
+    daromad = serializers.FloatField()

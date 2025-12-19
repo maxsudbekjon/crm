@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from datetime import timedelta
+from django.db.models import Sum
 
 from apps.models.leads import Lead
 from apps.serializers.lead_serializers import LeadSerializer
@@ -41,40 +42,50 @@ class LeadFilterAPIView(APIView):
 
         return queryset
 
+    # 🔹 TEPADAGI 4 TA UCHUN (COUNT + SUM, FILTERSIZ)
     def section_data(self, queryset, key):
         leads_qs = queryset.filter(status=key)
         return {
             "name": self.SECTION_STATUS[key],
             "count": leads_qs.count(),
-            "leads": LeadSerializer(leads_qs, many=True).data
+            "sum": leads_qs.aggregate(
+                total=Sum("payments__amount")
+            )["total"] or 0
         }
 
-    # <-- diqqat: period va boshqa URL kwargslarni qabul qilish uchun period=None, *args, **kwargs qo'shdim
     def get(self, request, period=None, *args, **kwargs):
-        # 1) Avval URL orqali kelgan periodni olamiz, bo'lmasa query paramga qaraymiz
         period_from_query = request.query_params.get("period")
-        period = period or period_from_query or "bugun"
+        period = period or period_from_query  # ❗ default yo‘q
 
         section = request.query_params.get("section")
 
-        queryset = Lead.objects.all()
-        queryset = self.filter_by_period(queryset, period)
+        # ===============================
+        # 1️⃣ TEPADAGI 4 TA (FILTERSIZ)
+        # ===============================
+        all_leads_qs = Lead.objects.all()
+
+        sections = {
+            key: self.section_data(all_leads_qs, key)
+            for key in self.SECTION_STATUS
+        }
+
+        # ===============================
+        # 2️⃣ 7-FRAME (FILTER BILAN)
+        # ===============================
+        leads_qs = Lead.objects.all()
+
+        if period:
+            leads_qs = self.filter_by_period(leads_qs, period)
 
         if section:
             if section not in self.SECTION_STATUS:
                 return Response({"detail": "Noto'g'ri section"}, status=400)
+            leads_qs = leads_qs.filter(status=section)
 
-            return Response({
-                "period": period,
-                "section": self.section_data(queryset, section)
-            })
-
-        data = {
-            key: self.section_data(queryset, key)
-            for key in self.SECTION_STATUS
-        }
+        leads_data = LeadSerializer(leads_qs, many=True).data
 
         return Response({
             "period": period,
-            "sections": data
+            "sections": sections,  # 🔥 doim to‘liq (count + sum)
+            "leads": leads_data    # 🔥 filter faqat shu yerda
         })

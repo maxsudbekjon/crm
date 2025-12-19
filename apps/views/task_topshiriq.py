@@ -1,61 +1,36 @@
-from django.utils import timezone
-from drf_yasg import openapi
-from drf_yasg.utils import swagger_auto_schema
 from rest_framework.generics import ListAPIView
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.pagination import PageNumberPagination
-
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+from django.utils import timezone
 from apps.models.task_model import Task
-from apps.serializers.task_topshiriq import TaskSerializer
-
-
-class TaskPagination(PageNumberPagination):
-    page_size = 10
-    page_size_query_param = 'page_size'
-    max_page_size = 50
-
+from apps.serializers import TaskSerializer
 
 class TaskListAPIView(ListAPIView):
     serializer_class = TaskSerializer
-    permission_classes = [IsAuthenticated]
-    pagination_class = TaskPagination
 
-    @swagger_auto_schema(
-        operation_summary="Operator topshiriqlari",
-        operation_description="barchasi / faol / kechiktirilgan / bajarildi",
-        manual_parameters=[
-            openapi.Parameter(
-                name='filter_by',
-                in_=openapi.IN_PATH,  # IN_PATH bo'lishi kerak!
-                type=openapi.TYPE_STRING,
-                enum=['barchasi', 'faol', 'kechiktirilgan', 'bajarildi'],
-                required=True,
-                description="Filter: barchasi, faol, kechiktirilgan, bajarildi"
-            )
-        ]
+    # Swagger query param optional
+    filter_param = openapi.Parameter(
+        name='filter_by',
+        in_=openapi.IN_QUERY,
+        type=openapi.TYPE_STRING,
+        required=False,
+        description="Filter: barchasi, faol, kechiktirilgan, bajarildi"
     )
-    def get(self, request, *args, **kwargs):
-        return super().get(request, *args, **kwargs)
 
+    @swagger_auto_schema(manual_parameters=[filter_param])
     def get_queryset(self):
-        user = self.request.user
-        now = timezone.now()
+        # Lead va course ma'lumotlarini oldindan yuklash
+        queryset = Task.objects.select_related('lead', 'lead__course').all()
 
-        filter_by = self.kwargs.get('filter_by', 'barchasi').strip().lower()
+        filter_by = self.request.GET.get('filter_by')
 
-        if hasattr(user, 'operator') and user.operator is not None:
-            queryset = Task.objects.filter(operator=user.operator)
-        else:
-            queryset = Task.objects.all()
-
-        queryset = queryset.exclude(deadline__isnull=True)
-        queryset = queryset.order_by('-deadline', '-created_at')
-
-        if filter_by == "bajarildi":
+        # Filterlash
+        if filter_by == 'faol':
+            queryset = queryset.filter(is_completed=False)
+        elif filter_by == 'kechiktirilgan':
+            queryset = queryset.filter(is_completed=False, deadline__lt=timezone.now())
+        elif filter_by == 'bajarildi':
             queryset = queryset.filter(is_completed=True)
-        elif filter_by == "kechiktirilgan":
-            queryset = queryset.filter(is_completed=False, deadline__lt=now)
-        elif filter_by == "faol":
-            queryset = queryset.filter(is_completed=False, deadline__gte=now)
+        # filter_by berilmasa: barcha tasks
 
         return queryset

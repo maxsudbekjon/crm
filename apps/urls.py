@@ -16,7 +16,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views.dashboard import DashboardMonthlyAPIView
 from .views.operator_dashboard import OperatorsDashboardAPIView
-from .views.task_topshiriq import TaskListAPIView
+from apps.views.task_topshiriq import TaskListAPIView
 
 urlpatterns = [
     # operator
@@ -38,6 +38,7 @@ urlpatterns = [
     path("calls/my/", MyCallsAPIView.as_view()),
 
     path("dashboard/operators/", OperatorsDashboardAPIView.as_view()),
+
     path("dashboard/status/", DashboardMonthlyAPIView.as_view()),
 
     path("operator/stats/", OperatorStatsAPIView.as_view(),name="operator-stats"),

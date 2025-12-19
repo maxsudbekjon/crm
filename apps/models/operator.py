@@ -18,6 +18,7 @@ class Operator(Base):
     salary = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     commission_rate = models.FloatField(default=0.05)
     penalty = models.IntegerField(default=0)
+    start_date = models.DateField(null=True, blank=True)
     gender = models.CharField(max_length=10, choices=StatusGender.choices)
     branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='operators')
 

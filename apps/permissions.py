@@ -24,3 +24,10 @@ class LeadListPermission(BasePermission):
         if request.user.is_staff:
             return True
         return obj.operator == request.user
+
+class IsAdminRole(BasePermission):
+    message = "Faqat admin userlar foydalanishi mumkin."
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(user and user.is_authenticated and getattr(user, "role", None) == "admin")

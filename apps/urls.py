@@ -6,6 +6,7 @@ from .views import *
 from .views.call import MyCallsAPIView
 from .views.director import DirectorStatistics
 from .views.lead_history import LeadHistoryView
+from .views.lead_search import lead_search_api
 
 app_name = "apps"
 
@@ -22,6 +23,7 @@ urlpatterns = [
     path('leads/', LeadListView.as_view(), name='lead-list'),
     path('leads/<int:pk>/update-status/', LeadStatusUpdateAPIView.as_view(), name='lead-update-status'),
     path('leads/sold/', SoldLeadsAPIView.as_view(), name='sold-leads'),
+    path('lead/search/', lead_search_api, name='lead_search'),
 
     path('tasks/create/', TaskCreateAPIView.as_view(), name='task-create'),
     path('tasks/list/tasks/<str:status>/', OperatorTaskListView.as_view(), name='task-list'),
@@ -34,6 +36,8 @@ urlpatterns = [
     #operator_analytics urls
     path('operator_analytics/', operator_analytics, name='operator_analytics'),
     path('overall_analitic/',  analytics_api, name='overall_analitic'),
+    path('source_convertion/',  source_conversion_api, name='source_convertion'),
+    path('weekly_dynamics/',  weekly_dynamics_api, name='weekly_dynamics'),
 
     # Router bilan viewsetlar
     path('', include(router.urls)),

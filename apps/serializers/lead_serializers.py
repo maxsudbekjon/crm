@@ -40,3 +40,8 @@ class LeadStatusUpdateSerializer(serializers.ModelSerializer):
                 )
 
         return attrs
+
+class LeadSearchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Lead
+        fields = "__all__"

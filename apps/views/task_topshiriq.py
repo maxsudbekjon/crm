@@ -15,8 +15,8 @@ class TaskListAPIView(ListAPIView):
                 in_=openapi.IN_QUERY,
                 type=openapi.TYPE_STRING,
                 required=False,
-                default='barchasi',  # ✅ default qiymat
-                enum=['barchasi', 'faol', 'kechiktirilgan', 'bajarildi'],  # ✅ dropdown variantlari
+                default='barchasi',
+                enum=['barchasi', 'faol', 'kechiktirilgan', 'bajarildi'],
                 description="Task holati bo‘yicha filter"
             )
         ],
@@ -27,7 +27,7 @@ class TaskListAPIView(ListAPIView):
 
     def get_queryset(self):
         queryset = Task.objects.select_related('lead', 'lead__course', 'operator')
-        filter_by = self.request.query_params.get('filter_by', 'barchasi')  # ✅ default barchasi
+        filter_by = self.request.query_params.get('filter_by', 'barchasi')
 
         if filter_by == 'faol':
             queryset = queryset.filter(is_completed=False)

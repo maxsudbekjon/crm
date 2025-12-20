@@ -1,22 +1,44 @@
-from django.db.models import Sum
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.db.models import Sum
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+
 from apps.models import Lead
+
 
 class DirectorStatistics(APIView):
     permission_classes = [IsAuthenticated]
 
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter(
+                'q',
+                openapi.IN_QUERY,
+                description="Lead full_name bo‘yicha qidirish",
+                type=openapi.TYPE_STRING
+            )
+        ]
+    )
     def get(self, request):
-        # 🔐 ROLE TEKSHIRISH (TO‘G‘RI USUL)
+        # 🔐 ROLE TEKSHIRISH
         if request.user.role != "admin":
             return Response(
                 {"detail": "Sizda bu sahifani ko‘rish huquqi yo‘q"},
                 status=403
             )
 
+        query = request.query_params.get("q", "")
+
+        # Select_related bilan queryni optimallashtiramiz
         leads = Lead.objects.select_related("course", "operator")
 
+        # Agar query berilgan bo‘lsa, filter qilamiz
+        if query:
+            leads = leads.filter(full_name__icontains=query)
+
+        # Status bo‘yicha summary
         status_map = {
             Lead.Status.NEED_CONTACT: "boglanish_kerak",
             Lead.Status.INFO_PROVIDED: "malumot_berildi",
@@ -28,16 +50,14 @@ class DirectorStatistics(APIView):
         }
 
         summary = {}
-
         for status, key in status_map.items():
             qs = leads.filter(status=status)
             summary[key] = {
                 "count": qs.count(),
-                "amount": qs.aggregate(
-                    total=Sum("course__price")
-                )["total"] or 0
+                "amount": qs.aggregate(total=Sum("course__price"))["total"] or 0
             }
 
+        # Leadlar ro'yxati
         lead_list = []
         for lead in leads:
             lead_list.append({

@@ -6,12 +6,15 @@ from .views import *
 from .views.call import MyCallsAPIView
 from .views.director import DirectorStatistics
 from .views.lead_history import LeadHistoryView
-from .views.lead_search import lead_search_api
+# from .views.lead_search import lead_search_api
 
 app_name = "apps"
 
 # DRF router bilan viewsetlar
 router = DefaultRouter()
+
+
+
 urlpatterns = [
     #operator
     path('operator-create/', OperatorCreateView.as_view(), name='operator-create'),
@@ -23,7 +26,7 @@ urlpatterns = [
     path('leads/', LeadListView.as_view(), name='lead-list'),
     path('leads/<int:pk>/update-status/', LeadStatusUpdateAPIView.as_view(), name='lead-update-status'),
     path('leads/sold/', SoldLeadsAPIView.as_view(), name='sold-leads'),
-    path('lead/search/', lead_search_api, name='lead_search'),
+    # path('lead/search/', lead_search_api, name='lead_search'),
 
     path('tasks/create/', TaskCreateAPIView.as_view(), name='task-create'),
     path('tasks/list/tasks/<str:status>/', OperatorTaskListView.as_view(), name='task-list'),

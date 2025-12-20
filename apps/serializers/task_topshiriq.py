@@ -1,23 +1,28 @@
 from rest_framework import serializers
-from apps.models import Lead
 from apps.models.task_model import Task
 
-class LeadSerializer(serializers.ModelSerializer):
-    course_name = serializers.CharField(source='course.name', read_only=True, default='-')  # course bo'sh bo'lsa '-'
-
-    class Meta:
-        model = Lead
-        fields = ['id', 'name', 'course_name']
-
 class TaskSerializer(serializers.ModelSerializer):
-    lead = LeadSerializer(read_only=True)  # nested serializer ishlaydi
-    lead_name = serializers.CharField(source='lead.name', read_only=True)
-    course_name = serializers.CharField(source='lead.course.name', read_only=True, default='-')
+    lead_name = serializers.CharField(source='lead.full_name', read_only=True)
+    course_name = serializers.SerializerMethodField()  # course_name uchun getter qo‘shildi
 
     class Meta:
         model = Task
         fields = [
-            'id', 'operator', 'lead', 'title', 'description',
-            'deadline', 'is_completed', 'completed_at',
-            'lead_name', 'course_name'
+            'id',
+            'operator',
+            'lead',
+            'lead_name',
+            'course_name',  # ✅ Meta.fields ichida bo‘lishi shart
+            'title',
+            'description',
+            'deadline',
+            'is_completed',
+            'completed_at',
         ]
+        ref_name = "TaskSerializerTopshiriq"  # ✅ unique ref_name
+
+
+    def get_course_name(self, obj):
+        if obj.lead and obj.lead.course:
+            return obj.lead.course.title  # <-- 'name' o‘rniga 'title' ishlatildi
+        return None

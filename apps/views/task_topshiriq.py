@@ -3,34 +3,40 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from django.utils import timezone
 from apps.models.task_model import Task
-from apps.serializers import TaskSerializer
+from apps.serializers.task_topshiriq import TaskSerializer
 
 class TaskListAPIView(ListAPIView):
     serializer_class = TaskSerializer
 
-    # Swagger query param optional
-    filter_param = openapi.Parameter(
-        name='filter_by',
-        in_=openapi.IN_QUERY,
-        type=openapi.TYPE_STRING,
-        required=False,
-        description="Filter: barchasi, faol, kechiktirilgan, bajarildi"
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter(
+                name='filter_by',
+                in_=openapi.IN_QUERY,
+                type=openapi.TYPE_STRING,
+                required=False,
+                default='barchasi',  # ✅ default qiymat
+                enum=['barchasi', 'faol', 'kechiktirilgan', 'bajarildi'],  # ✅ dropdown variantlari
+                description="Task holati bo‘yicha filter"
+            )
+        ],
+        responses={200: TaskSerializer(many=True)}
     )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
-    @swagger_auto_schema(manual_parameters=[filter_param])
     def get_queryset(self):
-        # Lead va course ma'lumotlarini oldindan yuklash
-        queryset = Task.objects.select_related('lead', 'lead__course').all()
+        queryset = Task.objects.select_related('lead', 'lead__course', 'operator')
+        filter_by = self.request.query_params.get('filter_by', 'barchasi')  # ✅ default barchasi
 
-        filter_by = self.request.GET.get('filter_by')
-
-        # Filterlash
         if filter_by == 'faol':
             queryset = queryset.filter(is_completed=False)
         elif filter_by == 'kechiktirilgan':
-            queryset = queryset.filter(is_completed=False, deadline__lt=timezone.now())
+            queryset = queryset.filter(
+                is_completed=False,
+                deadline__lt=timezone.localtime(timezone.now())
+            )
         elif filter_by == 'bajarildi':
             queryset = queryset.filter(is_completed=True)
-        # filter_by berilmasa: barcha tasks
 
         return queryset

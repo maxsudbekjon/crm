@@ -1,7 +1,6 @@
 from django.contrib import admin
 from django.utils.safestring import mark_safe
-from apps.models import Branch, Operator, Lead, Task, Penalty, SMS, Contract, Notification, Call, Course, Enrollment, \
-    Payment
+from apps.models import *
 from apps.tasks import process_lead_commission
 
 @admin.register(Branch)
@@ -14,7 +13,7 @@ class BranchAdmin(admin.ModelAdmin):
 
 @admin.register(Operator)
 class OperatorAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user', 'status', 'total_lead_amount','commission_rate', 'gender', 'salary', 'penalty', 'branch', 'photo_tag',
+    list_display = ('id', 'user', 'status', 'total_lead_amount', 'gender', 'salary', 'penalty', 'commission_rate', 'branch', 'photo_tag',
                     'created_at')
     search_fields = ('user', )
     list_filter = ('status', 'gender', 'branch')
@@ -37,13 +36,13 @@ class OperatorAdmin(admin.ModelAdmin):
 
 @admin.register(Lead)
 class LeadAdmin(admin.ModelAdmin):
-    list_display = ('id', 'full_name', 'phone', 'status', 'course', 'operator', 'source', 'demo_date', 'last_contact_date', 'created_at',
+    list_display = ('id', 'full_name', 'phone', 'status', 'course', 'operator', 'source', 'demo_date', 'last_contact_date', 'commission_added', 'penalty_given', 'created_at',
                     'updated_at')
     list_filter = ('status', 'course', 'operator', 'source')
     search_fields = ('full_name', 'phone', 'operator__user__username')
     ordering = ('-demo_date',)
     readonly_fields = ('created_at', 'updated_at')
-    fields = ('full_name', 'phone', 'course', 'operator', 'status', 'source', 'demo_date', 'last_contact_date')
+    fields = ('full_name', 'phone', 'course', 'operator', 'status', 'source', 'demo_date', 'last_contact_date', 'commission_added', 'penalty_given', 'created_at', 'updated_at')
 
 
 @admin.register(Task)
@@ -78,7 +77,7 @@ class CallAdmin(admin.ModelAdmin):
 
 @admin.register(Penalty)
 class PenaltyAdmin(admin.ModelAdmin):
-    list_display = ('operator', 'task', 'reason', 'points', 'created_at')
+    list_display = ('operator', 'task', 'reason', 'points', 'lead', 'created_at')
     search_fields = ('operator__full_name', 'task__title', 'reason')
     readonly_fields = ('created_at',)
 
@@ -123,3 +122,48 @@ def run_commission(modeladmin, request, queryset):
     from apps.tasks import process_lead_commission
     process_lead_commission()
     modeladmin.message_user(request, "Komissiya hisoblandi")
+
+
+from .models import Payment, OperatorMonthlySalary
+
+@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    list_display = ('id', 'lead', 'amount', 'created_at', 'commission_added')
+    list_filter = ('commission_added', 'created_at')
+    search_fields = ('lead__full_name', 'lead__phone')
+    ordering = ('-created_at',)
+    readonly_fields = ('created_at',)
+
+
+@admin.register(OperatorMonthlySalary)
+class OperatorMonthlySalaryAdmin(admin.ModelAdmin):
+    list_display = ('id', 'operator', 'month', 'commission', 'updated_at', 'total_salary')
+    list_filter = ('month', 'operator')
+    search_fields = ('operator__full_name', 'operator__phone_number')
+    ordering = ('-month',)
+    readonly_fields = ('updated_at',)
+
+@admin.register(DemoLesson)
+class DemoLessonAdmin(admin.ModelAdmin):
+    list_display = ("course", "teacher", "start_at", "is_active")
+    list_filter = ("course", "teacher", "is_active")
+    search_fields = ("course__name", "teacher__username")
+
+@admin.register(LeadDemoAssignment)
+class LeadDemoAssignmentAdmin(admin.ModelAdmin):
+    list_display = ("lead", "demo", "assigned_by", "assigned_at")
+    list_filter = ("assigned_at", "assigned_by")
+    search_fields = ("lead__name", "demo__course__name")
+
+@admin.register(OperatorActivity)
+class OperatorActivityAdmin(admin.ModelAdmin):
+    list_display = ("id", "operator", "lead", "activity_type", "description", "created_at")
+    list_filter = ("activity_type", "created_at")
+    search_fields = ("operator__user__username", "operator__user__first_name",
+                     "operator__user__last_name", "description")
+
+    ordering = ("-created_at",)
+    list_per_page = 25
+    readonly_fields = ("created_at",)
+
+

@@ -1,14 +1,18 @@
-import datetime
-
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum
 from django.http import JsonResponse
-from django.utils import timezone
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-from rest_framework.decorators import api_view
+from django.db.models import Count, Q
+from django.utils import timezone
+from django.utils.dateparse import parse_date
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from apps.models import Operator, Lead, Task, Contract, SMS, Call, Penalty, Payment, OperatorMonthlySalary, operator
+from apps.permissions import IsAdminRole
+from datetime import timedelta, datetime
+from rest_framework import request
 
-from apps.models import Operator, Lead, Task, Contract, SMS, Call, Penalty
 
 
 # =========================
@@ -23,6 +27,7 @@ from apps.models import Operator, Lead, Task, Contract, SMS, Call, Penalty
     operation_description="Bitta operator uchun kunlik va oylik analitika (calls, messages va o‘qiyotganlar bilan birga)",
     responses={200: openapi.Response(description="Operator analitika natijasi")}
 )
+
 @api_view(['GET'])
 def operator_analytics(request):
     operator_id = request.GET.get('operator_id')
@@ -100,60 +105,205 @@ def operator_analytics(request):
     return JsonResponse(result, safe=False)
 
 
-@api_view(['GET'])
+
+
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsAdminRole])
 def analytics_api(request):
-    now = timezone.now()
 
-    # 1 hafta va 1 oy ichida sotilgan leadlar
-    week_sold = Lead.objects.filter(
-        status=Lead.Status.SOLD,
-        updated_at__gte=now - timedelta(days=7)
-    ).count()
+    # =========================
+    # 1. Oyni aniqlash
+    # =========================
+    month_param = request.query_params.get("month")
+    if month_param:
+        month_start = parse_date(month_param + "-01")
+    else:
+        today = timezone.now().date()
+        month_start = today.replace(day=1)
 
-    month_sold = Lead.objects.filter(
-        status=Lead.Status.SOLD,
-        updated_at__gte=now - timedelta(days=30)
-    ).count()
+    if month_start.month == 12:
+        month_end = month_start.replace(year=month_start.year + 1, month=1)
+    else:
+        month_end = month_start.replace(month=month_start.month + 1)
 
-    # Eng ko'p lead olgan operator
-    top_operator_leads = (
-        Operator.objects.annotate(lead_count=Count('leads'))
-        .order_by('-lead_count')
-        .values('user__username', 'lead_count')
-        .first()
+    # =========================
+    # 2. Leadlar (oy bo‘yicha)
+    # =========================
+    leads_qs = Lead.objects.filter(
+        created_at__gte=month_start,
+        created_at__lt=month_end
+    ).select_related("course", "operator")
+
+    total_leads_count = leads_qs.count()
+    total_sold_leads_count = leads_qs.filter(status=Lead.Status.SOLD).count()
+
+    total_leads_sum = sum(
+        l.course.price for l in leads_qs if l.course
     )
 
-    # Eng yaxshi sotgan operator
-    top_operator_sales = (
-        Operator.objects.annotate(
-            sold_count=Count('leads', filter=Q(leads__status=Lead.Status.SOLD))
+    sold_leads_sum = sum(
+        l.course.price for l in leads_qs
+        if l.course and l.status == Lead.Status.SOLD
+    )
+
+    conversion = round(
+        (total_sold_leads_count / total_leads_count) * 100, 1
+    ) if total_leads_count else 0
+
+
+
+    # =========================
+    # 3. Operatorlar bo‘yicha
+    # =========================
+    operators_data = []
+
+    operators = Operator.objects.select_related("user")
+    for op in operators:
+        op_leads = leads_qs.filter(operator=op)
+
+        op_total_leads_count = op_leads.count()
+        op_sold_leads_count = op_leads.filter(status=Lead.Status.SOLD).count()
+
+        op_leads_sum = sum(
+            l.course.price for l in op_leads if l.course
         )
-        .order_by('-sold_count')
-        .values('user__username', 'sold_count')
-        .first()
+
+        op_sold_sum = sum(
+            l.course.price for l in op_leads
+            if l.course and l.status == Lead.Status.SOLD
+        )
+
+        op_conversion = round(
+            (op_sold_leads_count / op_total_leads_count) * 100, 1
+        ) if op_total_leads_count else 0
+
+        op_daromad = op.monthly_salaries.filter(
+            month=month_start
+        ).aggregate(total=Sum("commission"))["total"] or 0
+
+        op_calls_count = op.calls.filter(
+            call_time__gte=month_start,
+            call_time__lt=month_end
+        ).count()
+        if op_total_leads_count > 0:
+            operators_data.append({
+                "operator": op.user.username,
+                "total_leads": op_total_leads_count,
+                "sold_leads": op_sold_leads_count,
+                "op_calls_count": op_calls_count,
+                "conversion": op_conversion,
+                "daromad": float(op_daromad),
+            })
+
+    # =========================
+    # 4. Umumiy daromad
+    # =========================
+    total_daromad = Payment.objects.filter(
+        created_at__gte=month_start,
+        created_at__lt=month_end
+    ).aggregate(total=Sum("amount"))["total"] or 0
+
+    return Response({
+        "month": month_start,
+        "summary": {
+            "total_leads": total_leads_count,
+            "total_sold_leads": total_sold_leads_count,
+            "total_leads_sum": float(total_leads_sum),
+            "total_daromad": float(total_daromad),
+            "active_operators": len(operators_data),
+            "conversion": conversion,
+        },
+        "operators": operators_data
+    })
+
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsAdminRole])
+def source_conversion_api(request):
+
+    month_param = request.query_params.get("month")
+
+    if month_param:
+        month_start = timezone.make_aware(
+            datetime.strptime(month_param + "-01", "%Y-%m-%d")
+        )
+    else:
+        today = timezone.now()
+        month_start = today.replace(day=1, hour=0, minute=0, second=0)
+
+    if month_start.month == 12:
+        month_end = month_start.replace(year=month_start.year + 1, month=1)
+    else:
+        month_end = month_start.replace(month=month_start.month + 1)
+    qs = (
+        Lead.objects
+        .filter(
+            created_at__gte=month_start,
+            created_at__lt=month_end
+        )
+        .values("source")
+        .annotate(
+            total=Count("id"),
+            sold=Count(
+                "id",
+                filter=Q(status=Lead.Status.SOLD)
+            )
+        )
     )
 
-    overall_leads = Lead.objects.all().count()
-    sold_leads = Lead.objects.filter(status=Lead.Status.SOLD).count()
+    data = []
+    for row in qs:
+        total = row["total"]
+        sold = row["sold"]
+        conversion = round((sold / total) * 100, 1) if total else 0
 
-    # Oxirgi 1 hafta va 1 oy ichida kelgan leadlar soni
-    week_created = Lead.objects.filter(
-        created_at__gte=now - timedelta(days=7)
-    ).count()
+        data.append({
+            "source": row["source"],
+            "total": total,
+            "sold": sold,
+            "conversion": conversion
+        })
+    print("ROLE:", request.user.role)
+    print("IS_STAFF:", request.user.is_staff)
+    print("IS_SUPERUSER:", request.user.is_superuser)
+    return Response({
+        "sources": data,
+    })
 
-    month_created = Lead.objects.filter(
-        created_at__gte=now - timedelta(days=30)
-    ).count()
 
-    data = {
-        "sold_last_week": week_sold,
-        "sold_last_month": month_sold,
-        "top_operator_by_leads": top_operator_leads,
-        "top_operator_by_sales": top_operator_sales,
-        "lead_created_last_week": week_created,
-        "lead_created_last_month": month_created,
-        "overall_leads": overall_leads,
-        "sold_leads": sold_leads
-    }
 
-    return Response(data)
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsAdminRole])
+def weekly_dynamics_api(request):
+    today = timezone.now().date()
+    # Haftaning boshlanishini aniqlash (0 = bugungi kun)
+    start_date = today - timedelta(days=28)  # oxirgi 4 hafta
+
+    data = []
+    for i in range(4):
+        week_start = start_date + timedelta(weeks=i)
+        week_end = week_start + timedelta(weeks=1)
+
+        leads_count = Lead.objects.filter(
+            created_at__gte=week_start,
+            created_at__lt=week_end
+        ).count()
+
+        sold_count = Lead.objects.filter(
+            created_at__gte=week_start,
+            created_at__lt=week_end,
+            status=Lead.Status.SOLD
+        ).count()
+
+        data.append({
+            "week": f"{i+1}-hafta",
+            "leads": leads_count,
+            "sold": sold_count
+        })
+
+    return Response({
+        "weekly_dynamics": data
+    })

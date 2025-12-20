@@ -45,7 +45,8 @@ def create_and_send_notification(operator: Operator, message, task=None ,data=No
 
     return notif
 
-from datetime import date
+from datetime import date, datetime
+
 
 def first_day_of_month(dt: date):
     return date(dt.year, dt.month, 1)
@@ -68,18 +69,21 @@ from django.utils.timezone import make_aware
 import calendar
 
 
-def first_day_of_month(dt: date):
-    return date(dt.year, dt.month, 1)
-
-
 def last_day_of_month(dt: date):
     last_day = calendar.monthrange(dt.year, dt.month)[1]
     return date(dt.year, dt.month, last_day)
 
 
-def month_range(month_date: date):
-    """Return (start, end) for a given month."""
-    start = first_day_of_month(month_date)
-    end = last_day_of_month(month_date)
-    return make_aware(datetime.datetime.combine(start, datetime.time.min)), \
-           make_aware(datetime.datetime.combine(end, datetime.time.max))
+from datetime import datetime, time
+
+def month_range(day):
+    start = day.replace(day=1)
+    if start.month == 12:
+        end = start.replace(year=start.year + 1, month=1)
+    else:
+        end = start.replace(month=start.month + 1)
+
+    start_dt = make_aware(datetime.combine(start, time.min))
+    end_dt = make_aware(datetime.combine(end, time.max))
+
+    return start_dt, end_dt

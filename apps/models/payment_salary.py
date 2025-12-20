@@ -29,7 +29,7 @@ class OperatorMonthlySalary(models.Model):
 
     @property
     def total_salary(self):
-        return (self.salary or 0) + (self.commission or 0)
+        return self.commission or 0
 
 
     def __str__(self):

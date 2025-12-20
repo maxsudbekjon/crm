@@ -1,6 +1,7 @@
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import generics, permissions, status
-
+from rest_framework import generics, permissions
+from apps.permissions import LeadListPermission
 from apps.models import Lead
 from apps.serializers.lead_serializers import LeadCreateSerializer, LeadSerializer, LeadStatusUpdateSerializer
 from rest_framework.views import APIView
@@ -72,12 +73,6 @@ class LeadStatusUpdateAPIView(APIView):
             },
             status=status.HTTP_200_OK
         )
-
-
-from rest_framework import generics, permissions
-from apps.models import Lead
-from apps.serializers import LeadSerializer
-from apps.permissions import LeadListPermission
 
 
 class SoldLeadsAPIView(generics.ListAPIView):

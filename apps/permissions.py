@@ -23,3 +23,22 @@ class LeadListPermission(BasePermission):
         if request.user.is_staff:
             return True
         return obj.operator == request.user
+
+
+from rest_framework.permissions import BasePermission
+
+class IsOperator(BasePermission):
+    message = "Bu bo‘lim faqat operatorlar uchun."
+
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated
+            and getattr(request.user, "is_operator", False)
+        )
+
+class IsAdminRole(BasePermission):
+    message = "Faqat admin userlar foydalanishi mumkin."
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(user and user.is_authenticated and getattr(user, "role", None) == "admin")

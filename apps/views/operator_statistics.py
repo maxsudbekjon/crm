@@ -3,12 +3,18 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from datetime import date
 from apps.operator_statistics import OperatorStatisticsService
-
+from apps.permissions import IsOperator
 
 class OperatorStatisticsAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsOperator]
 
     def get(self, request):
+        if not hasattr(request.user, "operator"):
+            return Response(
+                {"detail": "Operator profili topilmadi"},
+                status=403
+            )
+
         operator = request.user.operator
         month = request.query_params.get("month")
 

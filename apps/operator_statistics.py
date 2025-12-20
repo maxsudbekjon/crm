@@ -1,12 +1,25 @@
 from datetime import date, timedelta
 from django.db.models import Count, Q, Avg
 from django.db.models.functions import TruncMonth
-from leads.models import Lead
-from operator_salary.models import OperatorMonthlySalary
-from apps.utils.date_utils import first_day_of_month, month_range
+from apps.models.leads import Lead
+from apps.models.payment_salary import OperatorMonthlySalary
+from apps.utils import first_day_of_month, month_range
 
 
 class OperatorStatisticsService:
+
+    @staticmethod
+    def monthly_revenue(operator, month_date):
+        start, end = month_range(month_date)
+
+        sold_leads = Lead.objects.filter(
+            operator=operator,
+            status=Lead.Status.SOLD,
+            created_at__range=[start, end],
+            course__isnull=False
+        ).select_related("course")
+
+        return sum(lead.course.price for lead in sold_leads)
 
     @staticmethod
     def revenue_last_6_months(operator):
@@ -15,13 +28,7 @@ class OperatorStatisticsService:
         results = []
 
         for month_date in last_6:
-            start, end = month_range(month_date)
-
-            sold_leads_sum = Lead.objects.filter(
-                operator=operator,
-                status=Lead.Status.SOLD,
-                created_at__range=[start, end]
-            ).count() * 1  # each sold lead = 1 price? (you said no price field)
+            month_revenue = OperatorStatisticsService.monthly_revenue(operator, month_date)
 
             salary = OperatorMonthlySalary.objects.filter(
                 operator=operator,
@@ -32,12 +39,11 @@ class OperatorStatisticsService:
 
             results.append({
                 "month": month_date.strftime("%b"),
-                "revenue": sold_leads_sum,
+                "revenue": month_revenue,
                 "profit": month_salary,
             })
 
         return results
-
     @staticmethod
     def conversion_funnel(operator, month_date: date):
         start, end = month_range(month_date)
@@ -55,26 +61,40 @@ class OperatorStatisticsService:
     @staticmethod
     def average_deal_value(operator, month_date: date):
         start, end = month_range(month_date)
-        current = Lead.objects.filter(
+
+        # Sold leads count this month
+        current_count = Lead.objects.filter(
             operator=operator,
             status=Lead.Status.SOLD,
             created_at__range=[start, end]
         ).count()
 
+        # Average deal value for this month
+        if current_count == 0:
+            current_avg = 0
+        else:
+            current_avg = OperatorStatisticsService.monthly_revenue(operator, month_date) / current_count
+
+        # Previous month
         prev_month = (month_date.replace(day=1) - timedelta(days=1)).replace(day=1)
         ps, pe = month_range(prev_month)
-        previous = Lead.objects.filter(
+
+        previous_count = Lead.objects.filter(
             operator=operator,
             status=Lead.Status.SOLD,
             created_at__range=[ps, pe]
         ).count()
 
-        delta = 0
-        if previous > 0:
-            delta = ((current - previous) / previous) * 100
+        # Previous month avg
+        if previous_count == 0:
+            previous_avg = 0
+            delta = 100  # YOUR RULE: if previous == 0 → delta = 100
+        else:
+            previous_avg = OperatorStatisticsService.monthly_revenue(operator, prev_month) / previous_count
+            delta = ((current_avg - previous_avg) / previous_avg) * 100
 
         return {
-            "value": current,
+            "value": round(current_avg, 1),
             "delta": round(delta, 1)
         }
 
@@ -132,7 +152,7 @@ class OperatorStatisticsService:
 
         prev_rate = (prev_sold / prev_total * 100) if prev_total > 0 else 0
 
-        delta = current_rate - prev_rate
+        delta = 100 if prev_sold == 0 else current_rate / prev_rate
 
         return {
             "rate": round(current_rate, 1),

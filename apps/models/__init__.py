@@ -10,3 +10,7 @@ from .task_model import *
 from .course import *
 from .payment_salary import *
 from .enrollment import *
+from .leadNotes import *
+from .leadStatusHistory import *
+from .demodars import *
+from .activity import *

@@ -209,13 +209,9 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'apps.tasks.check_task_deadlines_penalty',
         'schedule': crontab(minute='*/1'),
     },
-    'process-lead-commission-every-minute': {
-        'task': 'apps.tasks.process_lead_commission_all_sold',
-        'schedule': crontab(minute='*/1'),
-    },
     "check_lead_no_call_penalty": {
         "task": "apps.tasks.check_lead_no_call_penalty",
-        "schedule": crontab(hour=0, minute=0),
+        "schedule": crontab(),
     }
 }
 

@@ -3,9 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from django.db.models import Count
-from apps.models.leads import Lead
-from apps.models.operator import Operator
-from apps.models.call import Call
+from apps.models import Call, OperatorActivity, Operator, Lead
 
 
 class DashboardAPIView(APIView):
@@ -75,10 +73,25 @@ class DashboardAPIView(APIView):
                 "calls": calls_count
             })
 
+        activities = OperatorActivity.objects.filter(
+            operator=operator
+        ).select_related("operator")[:5]
+
+        last_activities = [
+            {
+                "title": activity.get_activity_type_display(),
+                "lead_full_name": activity.lead.full_name if activity.lead else None,
+                "time": activity.created_at.strftime("%H:%M"),
+                "date": activity.created_at.strftime("%d.%m.%Y")
+            }
+            for activity in activities
+        ]
+
         return Response({
             "today_leads": today_leads,
             "today_calls": today_calls,
             "today_sold": today_sold_leads,
             "conversion_rate": conversion_rate,
-            "weekly_status": week_data
+            "weekly_status": week_data,
+            "last_activities": last_activities
         })

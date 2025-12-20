@@ -38,4 +38,4 @@ class Call(Base):
         verbose_name_plural = "Qo‘ng‘iroqlar"
 
     def __str__(self):
-        return f"{self.lead.full_name} bilan {self.operator.full_name} ({self.get_result_display()})"
+        return f"{self.lead.full_name} bilan {self.operator.user.username} ({self.get_result_display()})"

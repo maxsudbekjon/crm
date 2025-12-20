@@ -4,9 +4,11 @@ from celery import shared_task
 from django.db import transaction
 from django.db.models import Count
 from collections import defaultdict
-
-from .models import Lead, Operator, Task
 from .utils import create_and_send_notification
+from apps.models.operator import Operator
+from apps.models.leads import Lead
+from apps.models.penalty import Penalty
+from apps.models.task_model import Task
 
 # =========================
 # Leadlarni operatorlarga taqsimlash
@@ -165,110 +167,39 @@ logger = logging.getLogger(__name__)
 from celery import shared_task
 from django.utils import timezone
 from apps.models import Lead, Operator
-
+from decimal import Decimal
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def process_lead_commission(self, lead_id=None):
     try:
-        # 1️⃣ Agar bitta lead berilgan bo‘lsa — faqat shuni ishlaymiz
+        leads = Lead.objects.filter(
+            status='sold',
+            commission_added=False
+        )
+
         if lead_id:
-            leads = Lead.objects.filter(id=lead_id, status='sold')
-        else:
-            # 2️⃣ Aks holda — barcha sold leadlarni olamiz
-            leads = Lead.objects.filter(status='sold')
+            leads = leads.filter(id=lead_id)
 
         for lead in leads:
             operator = lead.operator
-
-            # operator yo‘q bo‘lsa davom etamiz
-            if not operator:
+            if not operator or not lead.course:
                 continue
 
-            # 3️⃣ Course dan narx olish
-            course_price = lead.course.price if lead.course else 0
+            course_price = Decimal(lead.course.price)
+            commission_rate = Decimal(str(operator.commission_rate))
 
-            # 4️⃣ Operatorning commission rate
-            commission_rate = operator.commission_rate or 0
-            # 5️⃣ Komissiya hisoblash
             commission_amount = course_price * commission_rate
 
-            # 6️⃣ Operatorga qo‘shish
-            operator.salary += commission_amount
+            operator.salary = F('salary') + commission_amount
             operator.save(update_fields=['salary'])
 
-        return "Commission hisoblandi!"
+            lead.commission_added = True
+            lead.save(update_fields=['commission_added'])
+
+        return "Commission processed successfully"
 
     except Exception as exc:
         raise self.retry(exc=exc)
-
-
-# ===============================================================
-# 2️⃣ Barcha sold leadlar uchun task
-# ===============================================================
-@shared_task(name="apps.tasks.process_lead_commission_all_sold")
-def process_lead_commission_all_sold():
-    try:
-        sold_ids = Lead.objects.filter(status='sold').values_list('id', flat=True)
-        if not sold_ids:
-            logger.info("Sold lead topilmadi.")
-            return
-
-        for lead_id in sold_ids:
-            if lead_id is not None:
-                process_lead_commission.delay(int(lead_id))
-
-        logger.info(f"{len(sold_ids)} ta sold lead commission taskiga yuborildi.")
-
-    except Exception as exc:
-        logger.error(f"process_lead_commission_all_sold xatosi: {exc}")
-
-
-# ===============================================================
-# 3️⃣ Salary + penalty qayta hisoblash (Enrollments asosida)
-# ===============================================================
-@shared_task(name="apps.tasks.update_all_operator_salary_penalty")
-def update_all_operator_salary_penalty():
-    try:
-        operators = Operator.objects.all()
-        for op in operators:
-            enrollments = Enrollment.objects.filter(operator=op)
-
-            total_commission = sum(
-                Decimal(e.price_paid) * Decimal(getattr(op, "commission_rate", 0.10))
-                for e in enrollments
-            )
-
-            with transaction.atomic():
-                op.salary = total_commission
-                op.penalty = enrollments.count()
-                op.save(update_fields=['salary', 'penalty'])
-
-            logger.info(f"Operator {op.id}: salary={op.salary}, penalty={op.penalty}")
-
-    except Exception as exc:
-        logger.error(f"update_all_operator_salary_penalty xatosi: {exc}")
-
-
-# ===============================================================
-# 6️⃣ Enrollment commission task (operatorga foiz qo‘shish)
-# ===============================================================
-@shared_task
-def add_commission_task(enrollment_id):
-    enrollment = Enrollment.objects.get(id=enrollment_id)
-    operator = enrollment.operator
-    if operator:
-        commission_amount = enrollment.price_paid * operator.commission_rate / 100
-        operator.commission_total += commission_amount
-        operator.save()
-        logger.info(f"Operator {operator.id} ga {commission_amount} commission qo‘shildi.")
-
-
-
-from django.utils import timezone
-from datetime import timedelta
-from celery import shared_task
-from apps.models import Task, Lead, Penalty, Operator
-
 
 # -----------------------------------------------------
 # 1) TASK DEADLINE PENALTY
@@ -306,38 +237,38 @@ def check_task_deadlines_penalty():
     return f"{tasks.count()} ta task uchun penalty berildi."
 
 
-# -----------------------------------------------------
-# 2) OPERATOR 7 KUN LEADGA UMMUMAN QO‘NG‘IROQ QILMAGAN PENALTY
-# -----------------------------------------------------
 @shared_task(name="apps.tasks.check_lead_no_call_penalty")
 def check_lead_no_call_penalty():
     now = timezone.now()
-    seven_days_ago = now - timedelta(days=7)
+    one_day_ago = now - timedelta(minutes=3)
 
-    # 7 kundan beri umuman qo‘ng‘iroq bo‘lmagan leadlar
+    # 1 kundan beri umuman qo‘ng‘iroq bo‘lmagan leadlar
     leads = Lead.objects.filter(
         penalty_given=False,
-        created_at__lt=seven_days_ago,
-        last_called_at__isnull=True  # operator 1 marta ham bog‘lanmagan
-    )
+        created_at__lte=one_day_ago,
+        last_contact_date__isnull=True,
+        operator__isnull=False
+    ).select_related('operator')
+
+    penalty_count = 0
 
     for lead in leads:
         operator = lead.operator
 
-        # Penalty yozamiz
-        Penalty.objects.create(
-            operator=operator,
-            lead=lead,
-            reason="Operator has not called the lead for 7 days",
-            points=1
-        )
+        if operator:  # Operator mavjud ekanligini tekshirish
+            Penalty.objects.create(
+                operator=operator,
+                lead=lead,
+                reason="Operator 2 daqiqa ichida qo'ng'iroq qilmadi",
+                points=1
+            )
 
-        # Operator ballini oshiramiz
-        operator.penalty += 1
-        operator.save(update_fields=['penalty'])
+            operator.penalty += 1
+            operator.save(update_fields=["penalty"])
 
-        # Endi keyin yana penalty berilmasligi uchun flag
-        lead.penalty_given = True
-        lead.save(update_fields=['penalty_given'])
+            lead.penalty_given = True
+            lead.save(update_fields=["penalty_given"])
 
-    return f"{leads.count()} ta lead uchun 7 kun qo‘ng‘iroq qilinmaganligi uchun penalty berildi."
+            penalty_count += 1
+
+    return f"{leads.count} ta lead uchun 2 daqiqa qo'ng'iroq qilinmaganligi sababli penalty berildi."

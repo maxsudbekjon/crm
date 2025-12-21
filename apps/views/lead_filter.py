@@ -20,61 +20,33 @@ class LeadFilterAPIView(APIView):
     }
 
     def filter_by_period(self, queryset, period):
-        if not period:
-            return queryset
-
         today = timezone.now().date()
-
         if period == "bugun":
             return queryset.filter(created_at__date=today)
-
-        if period == "kecha":
+        elif period == "kecha":
             return queryset.filter(created_at__date=today - timedelta(days=1))
+        else:
+            return queryset  # boshqa filter bo‘lmasa hamma leads
 
-        if period == "3_kun_oldin":
-            return queryset.filter(created_at__date__gte=today - timedelta(days=3))
-
-        if period == "1_hafta_oldin":
-            return queryset.filter(created_at__date__gte=today - timedelta(days=7))
-
-        if period == "1_oy_oldin":
-            return queryset.filter(created_at__date__gte=today - timedelta(days=30))
-
-        return queryset
-
-    # 🔹 TEPADAGI 4 TA UCHUN (COUNT + SUM, FILTERSIZ)
     def section_data(self, queryset, key):
         leads_qs = queryset.filter(status=key)
         return {
             "name": self.SECTION_STATUS[key],
             "count": leads_qs.count(),
-            "sum": leads_qs.aggregate(
-                total=Sum("payments__amount")
-            )["total"] or 0
+            "sum": leads_qs.aggregate(total=Sum("payments__amount"))["total"] or 0
         }
 
-    def get(self, request, period=None, *args, **kwargs):
-        period_from_query = request.query_params.get("period")
-        period = period or period_from_query  # ❗ default yo‘q
-
+    def get(self, request, *args, **kwargs):
+        period = request.query_params.get("period")  # bugun yoki kecha
         section = request.query_params.get("section")
 
-        # ===============================
-        # 1️⃣ TEPADAGI 4 TA (FILTERSIZ)
-        # ===============================
+        # Sections (filtersiz)
         all_leads_qs = Lead.objects.all()
+        sections = {key: self.section_data(all_leads_qs, key) for key in self.SECTION_STATUS}
 
-        sections = {
-            key: self.section_data(all_leads_qs, key)
-            for key in self.SECTION_STATUS
-        }
-
-        # ===============================
-        # 2️⃣ 7-FRAME (FILTER BILAN)
-        # ===============================
+        # Leads filter bilan
         leads_qs = Lead.objects.all()
-
-        if period:
+        if period in ["bugun", "kecha"]:
             leads_qs = self.filter_by_period(leads_qs, period)
 
         if section:
@@ -82,10 +54,10 @@ class LeadFilterAPIView(APIView):
                 return Response({"detail": "Noto'g'ri section"}, status=400)
             leads_qs = leads_qs.filter(status=section)
 
-        leads_data = LeadSerializer(leads_qs, many=True).data
+        leads_data = LeadSerializer(leads_qs, many=True).data  # faqat id, full_name, phone
 
         return Response({
             "period": period,
-            "sections": sections,  # 🔥 doim to‘liq (count + sum)
-            "leads": leads_data    # 🔥 filter faqat shu yerda
+            "sections": sections,
+            "leads": leads_data
         })

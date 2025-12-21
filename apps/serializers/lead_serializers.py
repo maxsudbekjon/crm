@@ -5,11 +5,37 @@ from apps.models import Lead
 # ==========================
 # Lead Serializer
 # ==========================
+from rest_framework import serializers
+from django.utils import timezone
+from datetime import timedelta
+from apps.models.leads import Lead
+
+
 class LeadSerializer(serializers.ModelSerializer):
+    time_label = serializers.SerializerMethodField()
+
     class Meta:
         model = Lead
-        read_only_fields = ['operator']
-        fields = ['id', 'full_name', 'phone', 'status', 'source', 'course', 'demo_date', 'last_contact_date']
+        fields = (
+            'id',
+            'full_name',
+            'phone',
+            'time_label',
+        )
+
+    def get_time_label(self, obj):
+        today = timezone.now().date()
+        created_date = obj.created_at.date()
+
+        if created_date == today:
+            return "Bugun"
+        elif created_date == today - timedelta(days=1):
+            return "Kecha"
+        elif created_date >= today - timedelta(days=7):
+            return "1 hafta oldin"
+        else:
+            return created_date.strftime("%d.%m.%Y")
+
 
 
     def update(self, instance, validated_data):

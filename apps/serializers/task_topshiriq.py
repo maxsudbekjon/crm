@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from apps.models.task_model import Task
 
+
 class TaskSerializer(serializers.ModelSerializer):
     lead_name = serializers.CharField(source='lead.full_name', read_only=True)
     course_name = serializers.SerializerMethodField()
@@ -21,6 +22,16 @@ class TaskSerializer(serializers.ModelSerializer):
         ref_name = "TaskSerializerTopshiriq"
 
     def get_course_name(self, obj):
-        if obj.lead and obj.lead.course:
-            return obj.lead.course.title
-        return None
+        # 🔹 Swagger render paytida DB chaqirmaslik
+        if self.context.get('swagger_fake_view', False):
+            return None
+
+        lead = getattr(obj, 'lead', None)
+        if not lead:
+            return None
+
+        course = getattr(lead, 'course', None)
+        if not course:
+            return None
+
+        return getattr(course, 'title', None)

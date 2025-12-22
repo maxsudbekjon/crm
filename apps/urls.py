@@ -31,7 +31,7 @@ urlpatterns = [
     path('leads/<int:pk>/update-status/', LeadStatusUpdateAPIView.as_view()),
     path('leads/sold/', SoldLeadsAPIView.as_view()),
 
-    path("leads/filter/<str:period>/", LeadFilterAPIView.as_view()),
+    path("leads/filter/<str:period>/", LeadFilterAPIView.as_view(), name="leads-filter"),
 
     path('tasks/filter/<str:filter_by>/', TaskListAPIView.as_view(), name='task-list-filter'),
 

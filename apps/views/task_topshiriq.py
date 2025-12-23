@@ -20,6 +20,7 @@ class TaskListAPIView(ListAPIView):
                 description="Filter variantini tanlang",
                 type=openapi.TYPE_STRING,
                 enum=FILTER_OPTIONS,
+                required=False,
                 default='barchasi'
             )
         ]

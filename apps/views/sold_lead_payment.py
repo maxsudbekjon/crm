@@ -59,7 +59,6 @@ class OperatorSalaryListAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        # 🔥 Operator – faqat o‘zini ko‘radi
         if not request.user.is_admin:
             salaries = OperatorMonthlySalary.objects.filter(operator=request.user)
         else:

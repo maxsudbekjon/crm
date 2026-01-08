@@ -12,9 +12,7 @@ class DashboardMonthlyAPIView(APIView):
         current_year = today.year
         current_month = today.month
 
-        # ======================
-        # 1️⃣ CARDS (HOZIRGI OY)
-        # ======================
+
         monthly_leads = Lead.objects.filter(
             created_at__year=current_year,
             created_at__month=current_month
@@ -47,9 +45,7 @@ class DashboardMonthlyAPIView(APIView):
             if monthly_leads else 0
         )
 
-        # ======================
-        # 2️⃣ OPERATOR SAMARADORLIGI (TOP 5 HOZIRGI OY)
-        # ======================
+
         operators = Operator.objects.select_related("user").annotate(
             total_leads=Count(
                 "leads",
@@ -77,9 +73,7 @@ class DashboardMonthlyAPIView(APIView):
                 "sotilganlar": op.sold_leads
             })
 
-        # ======================
-        # 3️⃣ OXIRGI 6 OYLIK DAROMAD
-        # ======================
+
         six_months_ago = today - relativedelta(months=6)
         revenue_last_6_months = []
 

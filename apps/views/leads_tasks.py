@@ -87,14 +87,11 @@ class SoldLeadsAPIView(generics.ListAPIView):
     def get_queryset(self):
         qs = Lead.objects.all()
 
-        # Admin — hammasini ko‘radi
         if self.request.user.is_staff:
             return qs.filter(status="sold")
 
-        # Operator — faqat o'ziga tegishli sold leadlar
         return qs.filter(
-            operator__user=self.request.user,   # <— Asosiy tuzatish
+            operator__user=self.request.user,
             status="sold"
         )
-
 

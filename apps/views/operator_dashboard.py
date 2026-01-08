@@ -12,11 +12,9 @@ class OperatorsDashboardAPIView(APIView):
 
     def get(self, request):
 
-        # Oy boshini aniqlaymiz
         today = timezone.localdate()
         month_start = timezone.make_aware(datetime.combine(today.replace(day=1), time.min))
 
-        # Operatorlarni olish + lead va sold_leads
         operators = Operator.objects.select_related("user").annotate(
             total_leads=Count(
                 "leads",
@@ -46,14 +44,12 @@ class OperatorsDashboardAPIView(APIView):
 
             conversion = round((sold / total) * 100, 2) if total else 0
 
-            # Daromad (oy boshidan hozirgi kungacha)
             income = Lead.objects.filter(
                 operator=operator,
                 status=Lead.Status.SOLD,
                 created_at__gte=month_start
             ).aggregate(total_income=Sum('course__price'))['total_income'] or 0
 
-            # Xodimning ismi va ish boshlash sanasi
             operator_name = operator.user.get_full_name().strip() if operator.user.get_full_name() else operator.user.username
             start_working = operator.start_date.strftime("%d-%m-%Y") if getattr(operator, 'start_date', None) else "Noma'lum"
 

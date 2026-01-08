@@ -23,17 +23,14 @@ class OperatorStatsAPIView(ListAPIView):
             .select_related("user")
             .filter(user__role="operator")
             .annotate(
-                # Operatorga tegishli barcha leadlar soni
                 leads_count=Count("leads", distinct=True),
 
-                # Operatorga tegishli sotilgan leadlar soni
                 sold_count=Count(
                     "leads",
                     filter=Q(leads__status=Lead.Status.SOLD),
                     distinct=True
                 ),
 
-                # Operatorga tegishli sotilgan leadlar bo‘yicha daromad
                 revenue=Sum(
                     ExpressionWrapper(
                         F("leads__course__price") * F("commission_rate"),

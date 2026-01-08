@@ -8,9 +8,6 @@ from collections import defaultdict
 from .models import Lead, Operator, Task
 from .utils import create_and_send_notification
 
-# =========================
-# Leadlarni operatorlarga taqsimlash
-# =========================
 @shared_task
 def distribute_leads_task():
     debug_info = {
@@ -22,7 +19,6 @@ def distribute_leads_task():
         'summary': {}
     }
 
-    # Step 1: Get unassigned leads
     leads = list(Lead.objects.filter(operator__isnull=True))
     debug_info['total_unassigned_leads'] = len(leads)
 
@@ -30,7 +26,6 @@ def distribute_leads_task():
         debug_info['summary']['message'] = "No unassigned leads found."
         return debug_info
 
-    # Step 2: Get verified operators
     operators = Operator.objects.filter(status="Worker").annotate(
         total_leads_count=Count('leads')
     )
@@ -40,7 +35,6 @@ def distribute_leads_task():
         debug_info['summary']['message'] = "No verified operators found."
         return debug_info
 
-    # Step 3: Filter eligible operators
     eligible = []
 
     for op in operators:
@@ -71,10 +65,8 @@ def distribute_leads_task():
         debug_info['summary']['message'] = "No eligible operators found."
         return debug_info
 
-    # Step 4: Sort operators by total leads handled
     eligible = sorted(eligible, key=lambda o: o.total_leads_count)
 
-    # Step 5: Round-robin distribution
     lead_count = len(leads)
     op_count = len(eligible)
     leads_per_operator = lead_count // op_count
@@ -120,9 +112,6 @@ def distribute_leads_task():
     return debug_info
 
 
-# =========================
-# Task deadline notification
-# =========================
 @shared_task
 def check_task_deadlines():
     now = timezone.now()
@@ -159,9 +148,7 @@ from .models import Lead, Operator, Enrollment
 
 logger = logging.getLogger(__name__)
 
-# ===============================================================
-# 1️⃣ Lead commission task
-# ===============================================================
+
 from celery import shared_task
 from django.utils import timezone
 from apps.models import Lead, Operator
@@ -170,29 +157,22 @@ from apps.models import Lead, Operator
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def process_lead_commission(self, lead_id=None):
     try:
-        # 1️⃣ Agar bitta lead berilgan bo‘lsa — faqat shuni ishlaymiz
         if lead_id:
             leads = Lead.objects.filter(id=lead_id, status='sold')
         else:
-            # 2️⃣ Aks holda — barcha sold leadlarni olamiz
             leads = Lead.objects.filter(status='sold')
 
         for lead in leads:
             operator = lead.operator
 
-            # operator yo‘q bo‘lsa davom etamiz
             if not operator:
                 continue
 
-            # 3️⃣ Course dan narx olish
             course_price = lead.course.price if lead.course else 0
 
-            # 4️⃣ Operatorning commission rate
             commission_rate = operator.commission_rate or 0
-            # 5️⃣ Komissiya hisoblash
             commission_amount = course_price * commission_rate
 
-            # 6️⃣ Operatorga qo‘shish
             operator.salary += commission_amount
             operator.save(update_fields=['salary'])
 
@@ -202,9 +182,6 @@ def process_lead_commission(self, lead_id=None):
         raise self.retry(exc=exc)
 
 
-# ===============================================================
-# 2️⃣ Barcha sold leadlar uchun task
-# ===============================================================
 @shared_task(name="apps.tasks.process_lead_commission_all_sold")
 def process_lead_commission_all_sold():
     try:
@@ -223,9 +200,6 @@ def process_lead_commission_all_sold():
         logger.error(f"process_lead_commission_all_sold xatosi: {exc}")
 
 
-# ===============================================================
-# 3️⃣ Salary + penalty qayta hisoblash (Enrollments asosida)
-# ===============================================================
 @shared_task(name="apps.tasks.update_all_operator_salary_penalty")
 def update_all_operator_salary_penalty():
     try:
@@ -249,9 +223,6 @@ def update_all_operator_salary_penalty():
         logger.error(f"update_all_operator_salary_penalty xatosi: {exc}")
 
 
-# ===============================================================
-# 4️⃣ Auto penalty checker (har operatorga +1 penalty)
-# ===============================================================
 @shared_task(name="apps.tasks.auto_penalty_checker")
 def auto_penalty_checker():
     try:
@@ -266,9 +237,7 @@ def auto_penalty_checker():
         logger.error(f"auto_penalty_checker xatosi: {exc}")
 
 
-# ===============================================================
-# 5️⃣ Bulk penalty (barcha operatorlarga)
-# ===============================================================
+
 @shared_task(name="apps.tasks.add_penalty_to_all_bulk")
 def add_penalty_to_all_bulk(points: int = 1):
     try:
@@ -279,9 +248,7 @@ def add_penalty_to_all_bulk(points: int = 1):
         logger.error(f"add_penalty_to_all_bulk xatosi: {exc}")
 
 
-# ===============================================================
-# 6️⃣ Enrollment commission task (operatorga foiz qo‘shish)
-# ===============================================================
+
 @shared_task
 def add_commission_task(enrollment_id):
     enrollment = Enrollment.objects.get(id=enrollment_id)
@@ -293,9 +260,7 @@ def add_commission_task(enrollment_id):
         logger.info(f"Operator {operator.id} ga {commission_amount} commission qo‘shildi.")
 
 
-# ===============================================================
-# 7️⃣ Specific operatorga penalty qo‘shish task
-# ===============================================================
+
 @shared_task(name="apps.tasks.add_penalty")
 def add_penalty(operator_id: int, points: int = 1):
     try:

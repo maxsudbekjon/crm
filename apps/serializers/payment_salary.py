@@ -5,13 +5,11 @@ from apps.models import Payment, OperatorMonthlySalary, Lead
 class PaymentCreateSerializer(serializers.ModelSerializer):
     lead_id = serializers.IntegerField(write_only=True)
 
-    # Leaddan olinadigan maydonlar (saqlanmaydi, faqat ko‘rinadi)
     full_name = serializers.SerializerMethodField()
     phone = serializers.SerializerMethodField()
 
     operator = serializers.SerializerMethodField()
 
-    # Coursetan olinadigan maydonlar
     course_name = serializers.SerializerMethodField()
     course_price = serializers.SerializerMethodField()
 

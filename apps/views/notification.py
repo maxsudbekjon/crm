@@ -8,9 +8,7 @@ from apps.models import Notification
 from apps.serializers.task_serializers import NotificationSerializer
 
 
-# =========================
-# Notification Views
-# =========================
+
 
 class NotificationListView(generics.ListAPIView):
     serializer_class = NotificationSerializer
@@ -22,8 +20,6 @@ class NotificationListView(generics.ListAPIView):
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
 
-    # def get_queryset(self):
-    #     return Notification.objects.filter(user=self.request.user.operator).order_by('-created_at')
 
     def get_queryset(self):
         operator = getattr(self.request.user, "operator", None)

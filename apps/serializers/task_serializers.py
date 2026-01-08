@@ -2,9 +2,6 @@ from rest_framework import serializers
 from apps.models import Task, Notification
 
 
-# ==========================
-# Task Serializer
-# ==========================
 class TaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = Task

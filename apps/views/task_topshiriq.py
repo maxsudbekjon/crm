@@ -9,7 +9,6 @@ from apps.serializers.task_topshiriq import TaskSerializer
 class TaskListAPIView(ListAPIView):
     serializer_class = TaskSerializer
 
-    # 🔹 Filter variantlari
     FILTER_OPTIONS = ['barchasi', 'faol', 'bajarildi']
 
     @swagger_auto_schema(
@@ -36,7 +35,6 @@ class TaskListAPIView(ListAPIView):
             'operator'
         )
 
-        # 🔹 Query param: default 'barchasi'
         filter_by = self.request.query_params.get('filter_by', 'barchasi')
 
         if filter_by == 'faol':
@@ -46,6 +44,5 @@ class TaskListAPIView(ListAPIView):
             )
         elif filter_by == 'bajarildi':
             queryset = queryset.filter(is_completed=True)
-        # barchasi bo‘lsa hech narsa filterlanmaydi
 
         return queryset

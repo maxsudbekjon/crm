@@ -14,6 +14,5 @@ class LeadDemoAssignmentSerializer(serializers.ModelSerializer):
         read_only_fields = ['assigned_by', 'assigned_at']
 
     def create(self, validated_data):
-        # assigned_by ni request user bilan to‘ldiramiz
         validated_data['assigned_by'] = self.context['request'].user
         return super().create(validated_data)

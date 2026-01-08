@@ -4,9 +4,6 @@ from Auth.serializers import RegisterSerializer
 from apps.models import Operator
 
 
-# ==========================
-# Operator Serializer
-# =========================
 class OperatorSerializer(serializers.ModelSerializer):
     user = RegisterSerializer()
     # photo = serializers.ImageField(required=False)
@@ -33,6 +30,4 @@ class OperatorSerializer(serializers.ModelSerializer):
         rep['branch'] = instance.branch.name if instance.branch else None
         # rep['photo'] = instance.photo.url if instance.photo else None
         return rep
-
-
 

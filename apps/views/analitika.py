@@ -11,9 +11,7 @@ from rest_framework.response import Response
 from apps.models import Operator, Lead, Task, Contract, SMS, Call, Penalty
 
 
-# =========================
-# Operator Analytics
-# =========================
+
 
 @swagger_auto_schema(
     method='get',
@@ -104,7 +102,6 @@ def operator_analytics(request):
 def analytics_api(request):
     now = timezone.now()
 
-    # 1 hafta va 1 oy ichida sotilgan leadlar
     week_sold = Lead.objects.filter(
         status=Lead.Status.SOLD,
         updated_at__gte=now - timedelta(days=7)
@@ -115,7 +112,6 @@ def analytics_api(request):
         updated_at__gte=now - timedelta(days=30)
     ).count()
 
-    # Eng ko'p lead olgan operator
     top_operator_leads = (
         Operator.objects.annotate(lead_count=Count('leads'))
         .order_by('-lead_count')
@@ -123,7 +119,6 @@ def analytics_api(request):
         .first()
     )
 
-    # Eng yaxshi sotgan operator
     top_operator_sales = (
         Operator.objects.annotate(
             sold_count=Count('leads', filter=Q(leads__status=Lead.Status.SOLD))
@@ -136,7 +131,6 @@ def analytics_api(request):
     overall_leads = Lead.objects.all().count()
     sold_leads = Lead.objects.filter(status=Lead.Status.SOLD).count()
 
-    # Oxirgi 1 hafta va 1 oy ichida kelgan leadlar soni
     week_created = Lead.objects.filter(
         created_at__gte=now - timedelta(days=7)
     ).count()

@@ -8,10 +8,6 @@ from apps.serializers.operator_serializers import OperatorSerializer
 
 CustomUser = get_user_model()
 
-# =========================
-# Operator Views
-# =========================
-
 
 
 class IsAdmin(permissions.BasePermission):

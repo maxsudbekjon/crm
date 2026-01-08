@@ -79,7 +79,6 @@ class LeadFilterAPIView(APIView):
         else:
             leads_qs = self.filter_by_period(leads_qs, period)
 
-        # ✅ Response
         return Response({
             "period": period,
             "count": leads_qs.count(),

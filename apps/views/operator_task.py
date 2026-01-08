@@ -7,8 +7,6 @@ from apps.models.task_model import Task
 from apps.serializers.task_serializers import TaskSerializer
 
 
-# Task Views
-# =========================
 
 class TaskCreateAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
